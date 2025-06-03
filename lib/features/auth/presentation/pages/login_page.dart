@@ -1,10 +1,9 @@
 // lib/features/auth/presentation/pages/login_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-// Make sure this import is correct and points to your AuthBloc
 import 'package:fwitgi_app/features/auth/presentation/bloc/auth_bloc.dart';
-// You also need to import auth_state.dart here to recognize AuthAuthenticated and AuthFailure
-import 'package:fwitgi_app/features/auth/presentation/bloc/auth_state.dart'; // <--- ADD THIS IMPORT
+import 'package:fwitgi_app/features/auth/presentation/bloc/auth_state.dart';
+import 'package:fwitgi_app/core/theme/app_theme.dart'; // Import your AppTheme for colors
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -17,23 +16,20 @@ class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  bool _isLogin = true; // To toggle between login and signup
-
-  // If you plan to use a name for signup, you'll need a controller for it:
-  final TextEditingController _nameController = TextEditingController(); // <--- Add this if you need a name input
+  final TextEditingController _nameController = TextEditingController();
+  bool _isLogin = true;
+  bool _passwordVisible = false; // State for password visibility
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
-    _nameController.dispose(); // <--- Dispose name controller if added
+    _nameController.dispose();
     super.dispose();
   }
 
   void _handleSubmit() {
-    print('DEBUG: _handleSubmit() called!');
     if (_formKey.currentState!.validate()) {
-      print('DEBUG: Form validation passed!');
       if (_isLogin) {
         context.read<AuthBloc>().add(
           SignInRequested(
@@ -46,103 +42,196 @@ class _LoginPageState extends State<LoginPage> {
           SignUpRequested(
             email: _emailController.text.trim(),
             password: _passwordController.text,
-            name: _nameController.text.trim(), // <--- Use the name controller's text
+            name: _nameController.text.trim(),
           ),
         );
       }
-    } else {
-      print('DEBUG: Form validation failed!');
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(_isLogin ? 'Sign In' : 'Sign Up')),
+      // AppBar is optional, remove if you want full screen logo
+      // appBar: AppBar(title: Text(_isLogin ? 'Sign In' : 'Sign Up')),
       body: BlocConsumer<AuthBloc, AuthState>(
         listener: (context, state) {
-          // Listen for authentication success or failure
-          if (state is AuthAuthenticated) { // <--- CHANGE from AuthSuccess to AuthAuthenticated
-            print('Auth Success! User: ${state.user.email}'); // Access user details
-            // Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const HomePage()));
-            // For now, let's just show a success snackbar
+          if (state is AuthAuthenticated) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text('Logged in as ${state.user.email}')),
             );
-          } else if (state is AuthFailure) { // <--- This is now consistent with AuthBloc
-            print('Auth Failed: ${state.message}');
+          } else if (state is AuthFailure) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(content: Text(state.message)),
             );
           }
         },
         builder: (context, state) {
-          return Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  TextFormField(
-                    controller: _emailController,
-                    decoration: const InputDecoration(labelText: 'Email'),
-                    validator: (value) {
-                      if (value == null || value.isEmpty || !value.contains('@')) {
-                        return 'Please enter a valid email';
-                      }
-                      return null;
-                    },
+          final bool isLoading = state is AuthLoading; // Check if loading state
+
+          return SafeArea( // Added SafeArea for better layout on all devices
+            child: Center(
+              child: SingleChildScrollView( // Allows scrolling if content overflows
+                padding: const EdgeInsets.all(24.0), // Increased padding
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // --- START: Logo and App Title ---
+                      Image.asset(
+                        'assets/images/logo.png', // Make sure this path is correct and logo exists
+                        height: 120, // Adjusted height
+                        width: 120,
+                      ),
+                      const SizedBox(height: 24),
+                      Text(
+                        _isLogin ? 'Welcome Back!' : 'Join FwitGi',
+                        style: Theme.of(context).textTheme.headlineSmall?.copyWith( // Changed to headlineSmall
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).colorScheme.onBackground,
+                            ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        _isLogin
+                            ? 'Sign in to continue to your account.'
+                            : 'Create an account to start your fitness journey!',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                      ),
+                      const SizedBox(height: 40), // Increased spacing
+                      // --- END: Logo and App Title ---
+
+                      TextFormField(
+                        controller: _emailController,
+                        enabled: !isLoading, // Disable during loading
+                        decoration: InputDecoration(
+                          labelText: 'Email',
+                          hintText: 'Enter your email',
+                          prefixIcon: const Icon(Icons.email_outlined),
+                          border: OutlineInputBorder( // Professional border
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          filled: true, // Adds a fill color
+                          fillColor: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.1),
+                        ),
+                        keyboardType: TextInputType.emailAddress,
+                        validator: (value) {
+                          if (value == null || value.isEmpty || !value.contains('@')) {
+                            return 'Please enter a valid email';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 20), // Consistent spacing
+                      TextFormField(
+                        controller: _passwordController,
+                        enabled: !isLoading, // Disable during loading
+                        decoration: InputDecoration(
+                          labelText: 'Password',
+                          hintText: 'Enter your password',
+                          prefixIcon: const Icon(Icons.lock_outline),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          filled: true,
+                          fillColor: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.1),
+                          suffixIcon: IconButton( // Password visibility toggle
+                            icon: Icon(
+                              _passwordVisible ? Icons.visibility : Icons.visibility_off,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _passwordVisible = !_passwordVisible;
+                              });
+                            },
+                          ),
+                        ),
+                        obscureText: !_passwordVisible, // Apply visibility toggle
+                        validator: (value) {
+                          if (value == null || value.isEmpty || value.length < 6) {
+                            return 'Password must be at least 6 characters';
+                          }
+                          return null;
+                        },
+                      ),
+                      if (!_isLogin) ...[
+                        const SizedBox(height: 20), // Consistent spacing
+                        TextFormField(
+                          controller: _nameController,
+                          enabled: !isLoading, // Disable during loading
+                          decoration: InputDecoration(
+                            labelText: 'Name',
+                            hintText: 'Enter your full name',
+                            prefixIcon: const Icon(Icons.person_outline),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            filled: true,
+                            fillColor: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.1),
+                          ),
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Please enter your name';
+                            }
+                            return null;
+                          },
+                        ),
+                      ],
+                      const SizedBox(height: 32), // Spacing before button
+                      ElevatedButton(
+                        onPressed: isLoading ? null : _handleSubmit, // Disable button while loading
+                        style: ElevatedButton.styleFrom(
+                          minimumSize: const Size(double.infinity, 56), // Full width button
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          backgroundColor: AppTheme.primaryColor, // Use primary color
+                          foregroundColor: Colors.white, // Text color
+                          elevation: 3, // Subtle elevation
+                        ),
+                        child: isLoading
+                            ? const SizedBox(
+                                height: 24,
+                                width: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 3,
+                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                ),
+                              )
+                            : Text(
+                                _isLogin ? 'Sign In' : 'Sign Up',
+                                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                              ),
+                      ),
+                      const SizedBox(height: 20), // Spacing after button
+                      TextButton(
+                        onPressed: isLoading ? null : () { // Disable toggle button while loading
+                          setState(() {
+                            _isLogin = !_isLogin;
+                            _emailController.clear();
+                            _passwordController.clear();
+                            _nameController.clear();
+                            _passwordVisible = false; // Reset visibility
+                          });
+                        },
+                        child: Text(
+                          _isLogin
+                              ? "Don't have an account? Sign Up"
+                              : "Already have an account? Sign In",
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.secondary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _passwordController,
-                    decoration: const InputDecoration(labelText: 'Password'),
-                    obscureText: true,
-                    validator: (value) {
-                      if (value == null || value.isEmpty || value.length < 6) {
-                        return 'Password must be at least 6 characters';
-                      }
-                      return null;
-                    },
-                  ),
-                  // Add a name field for SignUp if _isLogin is false
-                  if (!_isLogin) ...[ // Only show name field in Sign Up mode
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _nameController, // <--- Use the name controller
-                      decoration: const InputDecoration(labelText: 'Name'),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please enter your name';
-                        }
-                        return null;
-                      },
-                    ),
-                  ],
-                  const SizedBox(height: 24),
-                  ElevatedButton(
-                    onPressed: state is AuthLoading ? null : _handleSubmit,
-                    child: state is AuthLoading
-                        ? const CircularProgressIndicator()
-                        : Text(_isLogin ? 'Sign In' : 'Sign Up'),
-                  ),
-                  const SizedBox(height: 16),
-                  TextButton(
-                    onPressed: () {
-                      setState(() {
-                        _isLogin = !_isLogin;
-                        // Clear fields when toggling to avoid validation issues
-                        _emailController.clear();
-                        _passwordController.clear();
-                        _nameController.clear();
-                      });
-                    },
-                    child: Text(_isLogin
-                        ? "Don't have an account? Sign Up"
-                        : "Already have an account? Sign In"),
-                  ),
-                ],
+                ),
               ),
             ),
           );

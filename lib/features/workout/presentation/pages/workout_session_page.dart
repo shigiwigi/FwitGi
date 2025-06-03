@@ -1,31 +1,60 @@
 import 'package:flutter/material.dart';
 import 'dart:async'; // For Timer
+import 'package:uuid/uuid.dart'; // For generating unique IDs
+import 'package:flutter_bloc/flutter_bloc.dart'; // For Bloc access
+import 'package:fwitgi_app/core/di/dependency_injection.dart'; // For GetIt
+import 'package:fwitgi_app/features/workout/presentation/bloc/workout_bloc.dart'; // Workout Bloc
+import 'package:fwitgi_app/features/auth/presentation/bloc/auth_bloc.dart'; // Auth Bloc
+import 'package:fwitgi_app/features/auth/presentation/bloc/auth_state.dart'; // <--- ADD THIS IMPORT for AuthState
+
 import '../../../../core/theme/app_theme.dart'; // Adjust path as necessary
 import '../../domain/entities/workout.dart'; // Import the workout entities
 
 class WorkoutSessionPage extends StatefulWidget {
-  final String? workoutTemplateId;
+  final String? workoutTemplateId; // Can be used to load a template
+  final String? userId; // To be passed from AuthBloc
 
-  const WorkoutSessionPage({Key? key, this.workoutTemplateId}) : super(key: key);
+  const WorkoutSessionPage({Key? key, this.workoutTemplateId, this.userId}) : super(key: key);
 
   @override
   State<WorkoutSessionPage> createState() => _WorkoutSessionPageState();
 }
 
 class _WorkoutSessionPageState extends State<WorkoutSessionPage> {
+  final Uuid _uuid = const Uuid(); // Instantiate Uuid
+  late String _currentWorkoutId; // To store the ID of the current workout
   late DateTime startTime;
   Duration elapsedTime = Duration.zero;
   Timer? timer;
   List<Exercise> exercises = [];
   String workoutName = '';
   WorkoutType selectedType = WorkoutType.push;
+  bool _isPaused = false;
+
+  // Define Bloc instance
+  late WorkoutBloc _workoutBloc;
+  String? _currentUserId; // To store the authenticated user's ID
 
   @override
   void initState() {
     super.initState();
+    _workoutBloc = getlt<WorkoutBloc>();
+
+    // Get current user ID from AuthBloc
+    final authState = context.read<AuthBloc>().state;
+    if (authState is AuthAuthenticated) { // 'AuthAuthenticated' will now be recognized
+      _currentUserId = authState.user.id;
+    } else {
+      _currentUserId = widget.userId ?? 'anonymous_user';
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Warning: User not authenticated for workout saving.')),
+      );
+    }
+
+    _currentWorkoutId = _uuid.v4();
     startTime = DateTime.now();
     _startTimer();
-    _loadWorkoutTemplate();
+    _initializeWorkoutSession();
   }
 
   @override
@@ -35,77 +64,70 @@ class _WorkoutSessionPageState extends State<WorkoutSessionPage> {
   }
 
   void _startTimer() {
+    if (timer != null && timer!.isActive) return;
     timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      setState(() {
-        elapsedTime = DateTime.now().difference(startTime);
-      });
+      if (!_isPaused) {
+        setState(() {
+          elapsedTime = DateTime.now().difference(startTime);
+        });
+      }
     });
   }
 
-  void _loadWorkoutTemplate() {
+  void _stopTimer() {
+    timer?.cancel();
+  }
+
+  void _togglePauseResume() {
+    setState(() {
+      _isPaused = !_isPaused;
+      if (_isPaused) {
+        _stopTimer();
+      } else {
+        startTime = DateTime.now().subtract(elapsedTime);
+        _startTimer();
+      }
+    });
+  }
+
+  void _initializeWorkoutSession() {
     if (widget.workoutTemplateId != null) {
-      // Load template from repository
-      // For now, add sample exercises
       setState(() {
-        workoutName = 'Push Day';
+        workoutName = 'Push Day Template';
+        selectedType = WorkoutType.push;
         exercises = [
           Exercise(
-            id: '1',
-            name: 'Bench Press',
+            id: _uuid.v4(),
+            name: 'Barbell Bench Press',
             category: 'Chest',
             sets: [
-              ExerciseSet(
-                  setNumber: 1,
-                  reps: 8,
-                  weight: 135,
-                  isCompleted: false,
-                  type: SetType.warmup),
-              ExerciseSet(
-                  setNumber: 2,
-                  reps: 6,
-                  weight: 185,
-                  isCompleted: false,
-                  type: SetType.normal),
-              ExerciseSet(
-                  setNumber: 3,
-                  reps: 6,
-                  weight: 185,
-                  isCompleted: false,
-                  type: SetType.normal),
+              ExerciseSet(setNumber: 1, reps: 10, weight: 60, isCompleted: false, type: SetType.warmup),
+              ExerciseSet(setNumber: 2, reps: 8, weight: 80, isCompleted: false, type: SetType.normal),
+              ExerciseSet(setNumber: 3, reps: 6, weight: 90, isCompleted: false, type: SetType.normal),
             ],
           ),
           Exercise(
-            id: '2',
-            name: 'Shoulder Press',
+            id: _uuid.v4(),
+            name: 'Overhead Press',
             category: 'Shoulders',
             sets: [
-              ExerciseSet(
-                  setNumber: 1,
-                  reps: 8,
-                  weight: 65,
-                  isCompleted: false,
-                  type: SetType.normal),
-              ExerciseSet(
-                  setNumber: 2,
-                  reps: 8,
-                  weight: 65,
-                  isCompleted: false,
-                  type: SetType.normal),
-              ExerciseSet(
-                  setNumber: 3,
-                  reps: 8,
-                  weight: 65,
-                  isCompleted: false,
-                  type: SetType.normal),
+              ExerciseSet(setNumber: 1, reps: 8, weight: 40, isCompleted: false, type: SetType.normal),
+              ExerciseSet(setNumber: 2, reps: 8, weight: 45, isCompleted: false, type: SetType.normal),
             ],
           ),
         ];
+      });
+    } else {
+      setState(() {
+        workoutName = 'New Workout Session';
+        selectedType = WorkoutType.custom;
+        exercises = [];
       });
     }
   }
 
   void _showWorkoutOptions() {
-    // Implement workout options logic (e.g., end workout, save template)
+    // Implement workout options logic (e.g., save as template, discard)
   }
 
   void _showExerciseOptions(int exerciseIndex) {
@@ -141,7 +163,7 @@ class _WorkoutSessionPageState extends State<WorkoutSessionPage> {
       final newSet = ExerciseSet(
         setNumber: newSetNumber,
         reps: 0,
-        weight: 0,
+        weight: 0.0,
         isCompleted: false,
         type: SetType.normal,
       );
@@ -161,13 +183,27 @@ class _WorkoutSessionPageState extends State<WorkoutSessionPage> {
     setState(() {
       exercises.add(
         Exercise(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          id: _uuid.v4(),
           name: 'New Exercise',
           category: 'Custom',
-          sets: [],
+          sets: [
+            ExerciseSet(setNumber: 1, reps: 0, weight: 0.0, isCompleted: false, type: SetType.normal),
+          ],
         ),
       );
     });
+  }
+
+  double _calculateExerciseTotalWeight(Exercise exercise) {
+    return exercise.sets.fold(0.0, (sum, set) => sum + (set.reps * set.weight));
+  }
+
+  int _calculateExerciseTotalSets(Exercise exercise) {
+    return exercise.sets.length;
+  }
+
+  int _calculateExerciseTotalReps(Exercise exercise) {
+    return exercise.sets.fold(0, (sum, set) => sum + set.reps);
   }
 
   Color _getSetTypeColor(SetType type) {
@@ -217,26 +253,26 @@ class _WorkoutSessionPageState extends State<WorkoutSessionPage> {
       ),
       body: Column(
         children: [
-          _buildWorkoutHeader(),
+          _buildWorkoutHeader(context),
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.all(16),
               itemCount: exercises.length + 1,
               itemBuilder: (context, index) {
                 if (index == exercises.length) {
-                  return _buildAddExerciseButton();
+                  return _buildAddExerciseButton(context);
                 }
-                return _buildExerciseCard(exercises[index], index);
+                return _buildExerciseCard(context, exercises[index], index);
               },
             ),
           ),
         ],
       ),
-      bottomNavigationBar: _buildWorkoutControls(),
+      bottomNavigationBar: _buildWorkoutControls(context),
     );
   }
 
-  Widget _buildWorkoutHeader() {
+  Widget _buildWorkoutHeader(BuildContext context) {
     return Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(20),
@@ -295,11 +331,11 @@ class _WorkoutSessionPageState extends State<WorkoutSessionPage> {
     );
   }
 
-  Widget _buildExerciseCard(Exercise exercise, int exerciseIndex) {
+  Widget _buildExerciseCard(BuildContext context, Exercise exercise, int exerciseIndex) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -340,7 +376,7 @@ class _WorkoutSessionPageState extends State<WorkoutSessionPage> {
                         exercise.category,
                         style: TextStyle(
                           fontSize: 14,
-                          color: Colors.grey[600],
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ],
@@ -387,10 +423,10 @@ class _WorkoutSessionPageState extends State<WorkoutSessionPage> {
                 ...exercise.sets.asMap().entries.map((entry) {
                   final setIndex = entry.key;
                   final set = entry.value;
-                  return _buildSetRow(exerciseIndex, setIndex, set);
+                  return _buildSetRow(context, exerciseIndex, setIndex, set);
                 }).toList(),
                 const SizedBox(height: 8),
-                _buildAddSetButton(exerciseIndex),
+                _buildAddSetButton(context, exerciseIndex),
               ],
             ),
           ),
@@ -399,17 +435,17 @@ class _WorkoutSessionPageState extends State<WorkoutSessionPage> {
     );
   }
 
-  Widget _buildSetRow(int exerciseIndex, int setIndex, ExerciseSet set) {
+  Widget _buildSetRow(BuildContext context, int exerciseIndex, int setIndex, ExerciseSet set) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(vertical: 8),
       decoration: BoxDecoration(
         color: set.isCompleted
             ? AppTheme.accentColor.withOpacity(0.1)
-            : Colors.grey[50],
+            : Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.1),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: set.isCompleted ? AppTheme.accentColor : Colors.grey[300]!,
+          color: set.isCompleted ? AppTheme.accentColor : Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.3),
           width: set.isCompleted ? 2 : 1,
         ),
       ),
@@ -443,9 +479,19 @@ class _WorkoutSessionPageState extends State<WorkoutSessionPage> {
               initialValue: set.reps.toString(),
               textAlign: TextAlign.center,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                border: InputBorder.none,
+              style: Theme.of(context).textTheme.bodyLarge,
+              decoration: InputDecoration(
+                border: const UnderlineInputBorder(),
+                focusedBorder: UnderlineInputBorder(
+                  borderSide: BorderSide(color: AppTheme.primaryColor),
+                ),
+                enabledBorder: UnderlineInputBorder(
+                  borderSide: BorderSide(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3)),
+                ),
                 contentPadding: EdgeInsets.zero,
+                isDense: true,
+                filled: true,
+                fillColor: Colors.transparent,
               ),
               onChanged: (value) =>
                   _updateSet(exerciseIndex, setIndex, reps: int.tryParse(value)),
@@ -455,10 +501,20 @@ class _WorkoutSessionPageState extends State<WorkoutSessionPage> {
             child: TextFormField(
               initialValue: set.weight.toString(),
               textAlign: TextAlign.center,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                border: InputBorder.none,
+              keyboardType: TextInputType.numberWithOptions(decimal: true),
+              style: Theme.of(context).textTheme.bodyLarge,
+              decoration: InputDecoration(
+                border: const UnderlineInputBorder(),
+                focusedBorder: UnderlineInputBorder(
+                  borderSide: BorderSide(color: AppTheme.primaryColor),
+                ),
+                enabledBorder: UnderlineInputBorder(
+                  borderSide: BorderSide(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3)),
+                ),
                 contentPadding: EdgeInsets.zero,
+                isDense: true,
+                filled: true,
+                fillColor: Colors.transparent,
               ),
               onChanged: (value) => _updateSet(exerciseIndex, setIndex,
                   weight: double.tryParse(value)),
@@ -478,7 +534,7 @@ class _WorkoutSessionPageState extends State<WorkoutSessionPage> {
     );
   }
 
-  Widget _buildAddSetButton(int exerciseIndex) {
+  Widget _buildAddSetButton(BuildContext context, int exerciseIndex) {
     return SizedBox(
       width: double.infinity,
       child: OutlinedButton.icon(
@@ -497,7 +553,7 @@ class _WorkoutSessionPageState extends State<WorkoutSessionPage> {
     );
   }
 
-  Widget _buildAddExerciseButton() {
+  Widget _buildAddExerciseButton(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(top: 16.0),
       child: SizedBox(
@@ -521,7 +577,7 @@ class _WorkoutSessionPageState extends State<WorkoutSessionPage> {
     );
   }
 
-  Widget _buildWorkoutControls() {
+  Widget _buildWorkoutControls(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -539,12 +595,40 @@ class _WorkoutSessionPageState extends State<WorkoutSessionPage> {
           children: [
             Expanded(
               child: ElevatedButton(
-                onPressed: () {
-                  // Implement end workout logic
-                  timer?.cancel();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Workout Ended!')),
+                onPressed: () async {
+                  _stopTimer();
+
+                  double totalWeightLifted = 0.0;
+                  int totalSets = 0;
+                  int totalReps = 0;
+
+                  for (var exercise in exercises) {
+                    totalWeightLifted += _calculateExerciseTotalWeight(exercise);
+                    totalSets += _calculateExerciseTotalSets(exercise);
+                    totalReps += _calculateExerciseTotalReps(exercise);
+                  }
+
+                  final workout = Workout(
+                    id: _currentWorkoutId,
+                    userId: _currentUserId!,
+                    name: workoutName.isNotEmpty ? workoutName : 'Untitled Workout',
+                    type: selectedType,
+                    exercises: exercises,
+                    startTime: startTime,
+                    endTime: DateTime.now(),
+                    duration: elapsedTime,
+                    notes: null,
+                    totalWeight: totalWeightLifted,
+                    totalSets: totalSets,
+                    totalReps: totalReps,
                   );
+
+                  _workoutBloc.add(SaveWorkout(workout));
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Workout Ended and Saved!')),
+                  );
+                  Navigator.of(context).pop();
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.accentColor,
@@ -561,17 +645,18 @@ class _WorkoutSessionPageState extends State<WorkoutSessionPage> {
             ),
             const SizedBox(width: 16),
             ElevatedButton(
-              onPressed: () {
-                // Implement pause/resume logic
-              },
+              onPressed: _togglePauseResume,
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.grey[700],
+                backgroundColor: _isPaused ? AppTheme.primaryColor : Colors.grey[700],
                 padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
-              child: const Icon(Icons.pause, color: Colors.white),
+              child: Icon(
+                _isPaused ? Icons.play_arrow : Icons.pause,
+                color: Colors.white,
+              ),
             ),
           ],
         ),
