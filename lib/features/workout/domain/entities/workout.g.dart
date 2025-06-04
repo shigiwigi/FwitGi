@@ -21,7 +21,7 @@ class WorkoutAdapter extends TypeAdapter<Workout> {
       userId: fields[1] as String,
       name: fields[2] as String,
       type: fields[3] as WorkoutType,
-      exercises: (fields[4] as List).cast<Exercise>(),
+      exercises: (fields[4] as List).cast<WorkoutExercise>(),
       startTime: fields[5] as DateTime,
       endTime: fields[6] as DateTime?,
       duration: fields[7] as Duration,
@@ -73,41 +73,38 @@ class WorkoutAdapter extends TypeAdapter<Workout> {
           typeId == other.typeId;
 }
 
-class ExerciseAdapter extends TypeAdapter<Exercise> {
+class WorkoutExerciseAdapter extends TypeAdapter<WorkoutExercise> {
   @override
-  final int typeId = 5;
+  final int typeId = 10;
 
   @override
-  Exercise read(BinaryReader reader) {
+  WorkoutExercise read(BinaryReader reader) {
     final numOfFields = reader.readByte();
     final fields = <int, dynamic>{
       for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
     };
-    return Exercise(
+    return WorkoutExercise(
       id: fields[0] as String,
-      name: fields[1] as String,
-      category: fields[2] as String,
-      sets: (fields[3] as List).cast<ExerciseSet>(),
-      notes: fields[4] as String?,
-      restTime: fields[5] as Duration?,
+      exerciseDefinitionId: fields[1] as String,
+      sets: (fields[2] as List).cast<ExerciseSet>(),
+      notes: fields[3] as String?,
+      restTime: fields[4] as Duration?,
     );
   }
 
   @override
-  void write(BinaryWriter writer, Exercise obj) {
+  void write(BinaryWriter writer, WorkoutExercise obj) {
     writer
-      ..writeByte(6)
+      ..writeByte(5)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
-      ..write(obj.name)
+      ..write(obj.exerciseDefinitionId)
       ..writeByte(2)
-      ..write(obj.category)
-      ..writeByte(3)
       ..write(obj.sets)
-      ..writeByte(4)
+      ..writeByte(3)
       ..write(obj.notes)
-      ..writeByte(5)
+      ..writeByte(4)
       ..write(obj.restTime);
   }
 
@@ -117,7 +114,7 @@ class ExerciseAdapter extends TypeAdapter<Exercise> {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is ExerciseAdapter &&
+      other is WorkoutExerciseAdapter &&
           runtimeType == other.runtimeType &&
           typeId == other.typeId;
 }

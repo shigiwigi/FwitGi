@@ -7,15 +7,33 @@ import 'package:fwitgi_app/core/di/dependency_injection.dart';
 import 'package:fwitgi_app/features/workout/presentation/bloc/workout_bloc.dart';
 import 'package:fwitgi_app/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:fwitgi_app/features/auth/presentation/bloc/auth_state.dart';
-import 'package:fwitgi_app/features/workout/presentation/bloc/workout_event.dart'; // <-- ADD THIS IMPORT
+import 'package:fwitgi_app/features/workout/presentation/bloc/workout_event.dart';
+import 'package:equatable/equatable.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../domain/entities/workout.dart';
 import '../../domain/repositories/workout_repository.dart';
+import '../../domain/repositories/exercise_definition_repository.dart';
+import '../../domain/entities/exercise_definition.dart';
+
+
+class SessionExerciseDisplayData extends Equatable {
+  final WorkoutExercise workoutExercise;
+  final ExerciseDefinition exerciseDefinition;
+
+  const SessionExerciseDisplayData({
+    required this.workoutExercise,
+    required this.exerciseDefinition,
+  });
+
+  @override
+  List<Object?> get props => [workoutExercise, exerciseDefinition];
+}
+
 
 class WorkoutSessionPage extends StatefulWidget {
-  final String? workoutTemplateId; // Can be used to load a template
-  final String? userId; // To be passed from AuthBloc
+  final String? workoutTemplateId;
+  final String? userId;
 
   const WorkoutSessionPage({Key? key, this.workoutTemplateId, this.userId}) : super(key: key);
 
@@ -24,35 +42,35 @@ class WorkoutSessionPage extends StatefulWidget {
 }
 
 class _WorkoutSessionPageState extends State<WorkoutSessionPage> {
-  final Uuid _uuid = const Uuid(); // Instantiate Uuid
-  late String _currentWorkoutId; // To store the ID of the current workout
+  final Uuid _uuid = const Uuid();
+  late String _currentWorkoutId;
   late DateTime startTime;
   Duration elapsedTime = Duration.zero;
   Timer? timer;
-  List<Exercise> exercises = [];
+  List<SessionExerciseDisplayData> exercises = [];
   String workoutName = '';
   WorkoutType selectedType = WorkoutType.push;
   bool _isPaused = false;
 
   late WorkoutBloc _workoutBloc;
-  late WorkoutRepository _workoutRepository; // To fetch templates directly
-  String? _currentUserId; // To store the authenticated user's ID
+  late WorkoutRepository _workoutRepository;
+  late ExerciseDefinitionRepository _exerciseDefinitionRepository;
+  String? _currentUserId;
 
-  late TextEditingController _workoutNameController; // For dynamic name editing
+  late TextEditingController _workoutNameController;
 
   @override
   void initState() {
     super.initState();
     _workoutBloc = getlt<WorkoutBloc>();
     _workoutRepository = getlt<WorkoutRepository>();
+    _exerciseDefinitionRepository = getlt<ExerciseDefinitionRepository>();
 
-    // Get current user ID from AuthBloc
     final authState = context.read<AuthBloc>().state;
     if (authState is AuthAuthenticated) {
       _currentUserId = authState.user.id;
     } else {
       _currentUserId = widget.userId ?? 'anonymous_user';
-      // Only show warning if not explicitly an anonymous user (i.e., userId was not passed)
       if (widget.userId == null) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -62,7 +80,7 @@ class _WorkoutSessionPageState extends State<WorkoutSessionPage> {
       }
     }
 
-    _currentWorkoutId = _uuid.v4(); // Generate unique ID for this workout session
+    _currentWorkoutId = _uuid.v4();
     startTime = DateTime.now();
     _startTimer();
     _initializeWorkoutSession();
@@ -106,7 +124,6 @@ class _WorkoutSessionPageState extends State<WorkoutSessionPage> {
       if (_isPaused) {
         _stopTimer();
       } else {
-        // Adjust startTime to account for the paused duration
         startTime = DateTime.now().subtract(elapsedTime);
         _startTimer();
       }
@@ -115,34 +132,67 @@ class _WorkoutSessionPageState extends State<WorkoutSessionPage> {
 
   Future<void> _initializeWorkoutSession() async {
     if (widget.workoutTemplateId != null) {
-      // Fetch the specific template from repository
       try {
         final List<Workout> templates = await _workoutRepository.getWorkoutTemplates();
         final Workout? template = templates.any((t) => t.id == widget.workoutTemplateId)
-        ? templates.firstWhere((t) => t.id == widget.workoutTemplateId)
-        : null;
-
+            ? templates.firstWhereOrNull((t) => t.id == widget.workoutTemplateId)
+            : null;
 
         if (template != null) {
+          final List<ExerciseDefinition> allExerciseDefinitions = await _exerciseDefinitionRepository.getExerciseDefinitions();
+
+          List<SessionExerciseDisplayData> sessionExercises = [];
+          for (var woExercise in template.exercises) {
+            final ExerciseDefinition? def = allExerciseDefinitions.firstWhereOrNull(
+              (def) => def.id == woExercise.exerciseDefinitionId,
+            );
+            if (def != null) {
+              sessionExercises.add(
+                SessionExerciseDisplayData(
+                  workoutExercise: WorkoutExercise(
+                    id: _uuid.v4(),
+                    exerciseDefinitionId: woExercise.exerciseDefinitionId,
+                    sets: woExercise.sets.map((s) => ExerciseSet(
+                      setNumber: s.setNumber,
+                      reps: s.reps,
+                      weight: s.weight,
+                      isCompleted: false,
+                      type: s.type,
+                    )).toList(),
+                    notes: woExercise.notes,
+                    restTime: woExercise.restTime,
+                  ),
+                  exerciseDefinition: def,
+                ),
+              );
+            } else {
+              print('Warning: ExerciseDefinition not found for ID: ${woExercise.exerciseDefinitionId}');
+              sessionExercises.add(
+                SessionExerciseDisplayData(
+                  workoutExercise: WorkoutExercise(
+                    id: _uuid.v4(),
+                    exerciseDefinitionId: woExercise.exerciseDefinitionId,
+                    sets: woExercise.sets.map((s) => ExerciseSet(
+                      setNumber: s.setNumber,
+                      reps: s.reps,
+                      weight: s.weight,
+                      isCompleted: false,
+                      type: s.type,
+                    )).toList(),
+                    notes: woExercise.notes,
+                    restTime: woExercise.restTime,
+                  ),
+                  exerciseDefinition: ExerciseDefinition(id: woExercise.exerciseDefinitionId, name: 'Unknown Exercise', category: 'N/A'),
+                ),
+              );
+            }
+          }
+
           setState(() {
             workoutName = template.name;
-            _workoutNameController.text = template.name; // Update controller
+            _workoutNameController.text = template.name;
             selectedType = template.type;
-            // Create a deep copy of exercises from template to allow modification
-            exercises = template.exercises.map((e) => Exercise(
-              id: _uuid.v4(), // Generate new IDs for session exercises
-              name: e.name,
-              category: e.category,
-              sets: e.sets.map((s) => ExerciseSet(
-                setNumber: s.setNumber,
-                reps: s.reps,
-                weight: s.weight,
-                isCompleted: false, // Reset completion status for a new session
-                type: s.type,
-              )).toList(),
-              notes: e.notes,
-              restTime: e.restTime,
-            )).toList();
+            exercises = sessionExercises;
           });
         }
       } catch (e) {
@@ -159,7 +209,6 @@ class _WorkoutSessionPageState extends State<WorkoutSessionPage> {
         });
       }
     } else {
-      // Start a brand new blank workout
       setState(() {
         workoutName = 'New Workout Session';
         _workoutNameController.text = workoutName;
@@ -169,8 +218,8 @@ class _WorkoutSessionPageState extends State<WorkoutSessionPage> {
     }
   }
 
+
   void _showWorkoutOptions() {
-    // Implement workout options logic (e.g., save as template, discard)
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Workout Options Tapped')),
     );
@@ -181,7 +230,7 @@ class _WorkoutSessionPageState extends State<WorkoutSessionPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Exercise?'),
-        content: Text('Are you sure you want to delete "${exercises[exerciseIndex].name}"?'),
+        content: Text('Are you sure you want to delete "${exercises[exerciseIndex].exerciseDefinition.name}"?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -207,8 +256,8 @@ class _WorkoutSessionPageState extends State<WorkoutSessionPage> {
 
   void _deleteSet(int exerciseIndex, int setIndex) {
     setState(() {
-      final updatedSets = List<ExerciseSet>.from(exercises[exerciseIndex].sets);
-      if (updatedSets.length > 1) { // Prevent deleting the last set if desired
+      final updatedSets = List<ExerciseSet>.from(exercises[exerciseIndex].workoutExercise.sets);
+      if (updatedSets.length > 1) {
         updatedSets.removeAt(setIndex);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -217,13 +266,9 @@ class _WorkoutSessionPageState extends State<WorkoutSessionPage> {
         return;
       }
 
-      exercises[exerciseIndex] = Exercise(
-        id: exercises[exerciseIndex].id,
-        name: exercises[exerciseIndex].name,
-        category: exercises[exerciseIndex].category,
-        sets: updatedSets,
-        notes: exercises[exerciseIndex].notes,
-        restTime: exercises[exerciseIndex].restTime,
+      exercises[exerciseIndex] = SessionExerciseDisplayData(
+        workoutExercise: exercises[exerciseIndex].workoutExercise.copyWith(sets: updatedSets),
+        exerciseDefinition: exercises[exerciseIndex].exerciseDefinition,
       );
     });
     ScaffoldMessenger.of(context).showSnackBar(
@@ -235,7 +280,8 @@ class _WorkoutSessionPageState extends State<WorkoutSessionPage> {
   void _updateSet(int exerciseIndex, int setIndex,
       {int? reps, double? weight, bool? isCompleted}) {
     setState(() {
-      final updatedSets = List<ExerciseSet>.from(exercises[exerciseIndex].sets);
+      final currentWorkoutExercise = exercises[exerciseIndex].workoutExercise;
+      final updatedSets = List<ExerciseSet>.from(currentWorkoutExercise.sets);
       updatedSets[setIndex] = ExerciseSet(
         setNumber: updatedSets[setIndex].setNumber,
         reps: reps ?? updatedSets[setIndex].reps,
@@ -243,20 +289,18 @@ class _WorkoutSessionPageState extends State<WorkoutSessionPage> {
         isCompleted: isCompleted ?? updatedSets[setIndex].isCompleted,
         type: updatedSets[setIndex].type,
       );
-      exercises[exerciseIndex] = Exercise(
-        id: exercises[exerciseIndex].id,
-        name: exercises[exerciseIndex].name,
-        category: exercises[exerciseIndex].category,
-        sets: updatedSets,
-        notes: exercises[exerciseIndex].notes,
-        restTime: exercises[exerciseIndex].restTime,
+
+      exercises[exerciseIndex] = SessionExerciseDisplayData(
+        workoutExercise: currentWorkoutExercise.copyWith(sets: updatedSets),
+        exerciseDefinition: exercises[exerciseIndex].exerciseDefinition,
       );
     });
   }
 
   void _addSet(int exerciseIndex) {
     setState(() {
-      final currentSets = exercises[exerciseIndex].sets;
+      final currentWorkoutExercise = exercises[exerciseIndex].workoutExercise;
+      final currentSets = currentWorkoutExercise.sets;
       final newSetNumber = currentSets.isNotEmpty ? currentSets.last.setNumber + 1 : 1;
       final newSet = ExerciseSet(
         setNumber: newSetNumber,
@@ -266,55 +310,333 @@ class _WorkoutSessionPageState extends State<WorkoutSessionPage> {
         type: SetType.normal,
       );
       final updatedSets = List<ExerciseSet>.from(currentSets)..add(newSet);
-      exercises[exerciseIndex] = Exercise(
-        id: exercises[exerciseIndex].id,
-        name: exercises[exerciseIndex].name,
-        category: exercises[exerciseIndex].category,
-        sets: updatedSets,
-        notes: exercises[exerciseIndex].notes,
-        restTime: exercises[exerciseIndex].restTime,
+      exercises[exerciseIndex] = SessionExerciseDisplayData(
+        workoutExercise: currentWorkoutExercise.copyWith(sets: updatedSets),
+        exerciseDefinition: exercises[exerciseIndex].exerciseDefinition,
       );
     });
   }
 
   void _addExercise() {
     setState(() {
+      final String newExerciseDefId = _uuid.v4();
       exercises.add(
-        Exercise(
-          id: _uuid.v4(),
-          name: 'New Exercise',
-          category: 'Custom',
-          sets: [
-            ExerciseSet(setNumber: 1, reps: 0, weight: 0.0, isCompleted: false, type: SetType.normal),
-          ],
+        SessionExerciseDisplayData(
+          workoutExercise: WorkoutExercise(
+            id: _uuid.v4(),
+            exerciseDefinitionId: newExerciseDefId,
+            sets: [
+              ExerciseSet(setNumber: 1, reps: 0, weight: 0.0, isCompleted: false, type: SetType.normal),
+            ],
+            notes: null,
+            restTime: null,
+          ),
+          exerciseDefinition: ExerciseDefinition(
+            id: newExerciseDefId,
+            name: 'New Custom Exercise',
+            category: 'Custom',
+            measurementType: ExerciseMeasurementType.reps,
+          ),
         ),
       );
     });
   }
 
-  // Helper functions to calculate stats
-  double _calculateExerciseTotalWeight(Exercise exercise) {
-    return exercise.sets.fold(0.0, (sum, set) => sum + (set.reps * set.weight));
+  // Re-added the missing _buildAddExerciseButton method
+  Widget _buildAddExerciseButton(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 16.0),
+      child: SizedBox(
+        width: double.infinity,
+        child: ElevatedButton.icon(
+          onPressed: _addExercise,
+          icon: const Icon(Icons.add, color: Colors.white),
+          label: const Text(
+            'Add Exercise',
+            style: TextStyle(color: Colors.white),
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppTheme.primaryColor,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
-  int _calculateExerciseTotalSets(Exercise exercise) {
-    return exercise.sets.length;
+  // Re-added the missing _buildExerciseCard method
+  Widget _buildExerciseCard(BuildContext context, SessionExerciseDisplayData sessionExercise, int exerciseIndex) {
+    final ExerciseDefinition exerciseDef = sessionExercise.exerciseDefinition;
+    final WorkoutExercise workoutEx = sessionExercise.workoutExercise;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Container(
+                  width: 8,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryColor,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        exerciseDef.name,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        exerciseDef.category,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, color: AppTheme.errorColor),
+                  onPressed: () => _deleteExercise(exerciseIndex),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    const SizedBox(
+                        width: 40,
+                        child: Text('SET',
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 12))),
+                    Expanded(
+                        child: Text(
+                            exerciseDef.measurementType == ExerciseMeasurementType.time ? 'TIME' : 'REPS',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 12))),
+                    const Expanded(
+                        child: Text('WEIGHT',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 12))),
+                    const SizedBox(
+                        width: 40,
+                        child: Text('✓',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 12))),
+                    const SizedBox(
+                        width: 40,
+                        child: Text('',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 12))),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ...workoutEx.sets.asMap().entries.map((entry) {
+                  final setIndex = entry.key;
+                  final set = entry.value;
+                  return _buildSetRow(context, exerciseIndex, setIndex, set, exerciseDef.measurementType);
+                }).toList(),
+                const SizedBox(height: 8),
+                _buildAddSetButton(context, exerciseIndex),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
-  int _calculateExerciseTotalReps(Exercise exercise) {
-    return exercise.sets.fold(0, (sum, set) => sum + set.reps);
+  // Re-added the missing _buildSetRow method
+  Widget _buildSetRow(BuildContext context, int exerciseIndex, int setIndex, ExerciseSet set, ExerciseMeasurementType measurementType) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        color: set.isCompleted
+            ? AppTheme.accentColor.withOpacity(0.1)
+            : Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: set.isCompleted ? AppTheme.accentColor : Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.3),
+          width: set.isCompleted ? 2 : 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 40,
+            child: Center(
+              child: Container(
+                width: 24,
+                height: 24,
+                decoration: BoxDecoration(
+                  color: _getSetTypeColor(set.type),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Center(
+                  child: Text(
+                    set.setNumber.toString(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: measurementType == ExerciseMeasurementType.reps
+                ? TextFormField(
+                    initialValue: set.reps.toString(),
+                    textAlign: TextAlign.center,
+                    keyboardType: TextInputType.number,
+                    style: Theme.of(context).textTheme.bodyLarge,
+                    decoration: InputDecoration(
+                      border: const UnderlineInputBorder(),
+                      focusedBorder: UnderlineInputBorder(
+                        borderSide: BorderSide(color: AppTheme.primaryColor),
+                      ),
+                      enabledBorder: UnderlineInputBorder(
+                        borderSide: BorderSide(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3)),
+                      ),
+                      contentPadding: EdgeInsets.zero,
+                      isDense: true,
+                      filled: true,
+                      fillColor: Colors.transparent,
+                    ),
+                    onChanged: (value) =>
+                        _updateSet(exerciseIndex, setIndex, reps: int.tryParse(value)),
+                  )
+                : Text(
+                    '${set.reps} ${measurementType == ExerciseMeasurementType.time ? 's' : ''}',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyLarge,
+                  ),
+          ),
+          Expanded(
+            child: TextFormField(
+              initialValue: set.weight.toString(),
+              textAlign: TextAlign.center,
+              keyboardType: TextInputType.numberWithOptions(decimal: true),
+              style: Theme.of(context).textTheme.bodyLarge,
+              decoration: InputDecoration(
+                border: const UnderlineInputBorder(),
+                focusedBorder: UnderlineInputBorder(
+                  borderSide: BorderSide(color: AppTheme.primaryColor),
+                ),
+                enabledBorder: UnderlineInputBorder(
+                  borderSide: BorderSide(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3)),
+                ),
+                contentPadding: EdgeInsets.zero,
+                isDense: true,
+                filled: true,
+                fillColor: Colors.transparent,
+              ),
+              onChanged: (value) => _updateSet(exerciseIndex, setIndex,
+                  weight: double.tryParse(value)),
+            ),
+          ),
+          SizedBox(
+            width: 40,
+            child: Checkbox(
+              value: set.isCompleted,
+              onChanged: (value) =>
+                  _updateSet(exerciseIndex, setIndex, isCompleted: value),
+              activeColor: AppTheme.accentColor,
+            ),
+          ),
+          SizedBox(
+            width: 40,
+            child: IconButton(
+              icon: const Icon(Icons.close, size: 18, color: Colors.grey),
+              onPressed: () => _deleteSet(exerciseIndex, setIndex),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Re-added the missing _buildAddSetButton method
+  Widget _buildAddSetButton(BuildContext context, int exerciseIndex) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: () => _addSet(exerciseIndex),
+        icon: const Icon(Icons.add),
+        label: const Text('Add Set'),
+        style: OutlinedButton.styleFrom(
+          side: BorderSide(color: AppTheme.primaryColor.withOpacity(0.5)),
+          foregroundColor: AppTheme.primaryColor,
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      ),
+    );
+  }
+
+  double _calculateExerciseTotalWeight(SessionExerciseDisplayData sessionExercise) {
+    return sessionExercise.workoutExercise.sets.fold(0.0, (sum, set) => sum + (set.reps * set.weight));
+  }
+
+  int _calculateExerciseTotalSets(SessionExerciseDisplayData sessionExercise) {
+    return sessionExercise.workoutExercise.sets.length;
+  }
+
+  int _calculateExerciseTotalReps(SessionExerciseDisplayData sessionExercise) {
+    return sessionExercise.workoutExercise.sets.fold(0, (sum, set) => sum + set.reps);
   }
 
   double _calculateWorkoutTotalWeight() {
-    return exercises.fold(0.0, (sum, exercise) => sum + _calculateExerciseTotalWeight(exercise));
+    return exercises.fold(0.0, (sum, sessionExercise) => sum + _calculateExerciseTotalWeight(sessionExercise));
   }
 
   int _calculateWorkoutTotalSets() {
-    return exercises.fold(0, (sum, exercise) => sum + _calculateExerciseTotalSets(exercise));
+    return exercises.fold(0, (sum, sessionExercise) => sum + _calculateExerciseTotalSets(sessionExercise));
   }
 
   int _calculateWorkoutTotalReps() {
-    return exercises.fold(0, (sum, exercise) => sum + _calculateExerciseTotalReps(exercise));
+    return exercises.fold(0, (sum, sessionExercise) => sum + _calculateExerciseTotalReps(sessionExercise));
   }
 
   Color _getSetTypeColor(SetType type) {
@@ -337,7 +659,6 @@ class _WorkoutSessionPageState extends State<WorkoutSessionPage> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Editable Workout Name
             TextFormField(
               controller: _workoutNameController,
               decoration: const InputDecoration(
@@ -348,7 +669,6 @@ class _WorkoutSessionPageState extends State<WorkoutSessionPage> {
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               maxLines: 1,
             ),
-            // Live Timer
             Text(
               '${elapsedTime.inHours.toString().padLeft(2, '0')}:'
               '${(elapsedTime.inMinutes % 60).toString().padLeft(2, '0')}:'
@@ -372,7 +692,7 @@ class _WorkoutSessionPageState extends State<WorkoutSessionPage> {
       ),
       body: Column(
         children: [
-          _buildWorkoutSummary(context), // New summary section
+          _buildWorkoutSummary(context),
           _buildWorkoutHeader(context),
           Expanded(
             child: ListView.builder(
@@ -391,6 +711,7 @@ class _WorkoutSessionPageState extends State<WorkoutSessionPage> {
       bottomNavigationBar: _buildWorkoutControls(context),
     );
   }
+
 
   Widget _buildWorkoutSummary(BuildContext context) {
     return Container(
@@ -500,265 +821,6 @@ class _WorkoutSessionPageState extends State<WorkoutSessionPage> {
     );
   }
 
-  Widget _buildExerciseCard(BuildContext context, Exercise exercise, int exerciseIndex) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Container(
-                  width: 8,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryColor,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        exercise.name,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        exercise.category,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.delete_outline, color: AppTheme.errorColor),
-                  onPressed: () => _deleteExercise(exerciseIndex),
-                ),
-              ],
-            ),
-          ),
-          const Divider(height: 1),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    const SizedBox(
-                        width: 40,
-                        child: Text('SET',
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 12))),
-                    const Expanded(
-                        child: Text('REPS',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 12))),
-                    const Expanded(
-                        child: Text('WEIGHT',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 12))),
-                    const SizedBox(
-                        width: 40,
-                        child: Text('✓',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 12))),
-                    const SizedBox(
-                        width: 40, // For delete icon
-                        child: Text('',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 12))),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                ...exercise.sets.asMap().entries.map((entry) {
-                  final setIndex = entry.key;
-                  final set = entry.value;
-                  return _buildSetRow(context, exerciseIndex, setIndex, set);
-                }).toList(),
-                const SizedBox(height: 8),
-                _buildAddSetButton(context, exerciseIndex),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSetRow(BuildContext context, int exerciseIndex, int setIndex, ExerciseSet set) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      decoration: BoxDecoration(
-        color: set.isCompleted
-            ? AppTheme.accentColor.withOpacity(0.1)
-            : Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: set.isCompleted ? AppTheme.accentColor : Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.3),
-          width: set.isCompleted ? 2 : 1,
-        ),
-      ),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 40,
-            child: Center(
-              child: Container(
-                width: 24,
-                height: 24,
-                decoration: BoxDecoration(
-                  color: _getSetTypeColor(set.type),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Center(
-                  child: Text(
-                    set.setNumber.toString(),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          Expanded(
-            child: TextFormField(
-              initialValue: set.reps.toString(),
-              textAlign: TextAlign.center,
-              keyboardType: TextInputType.number,
-              style: Theme.of(context).textTheme.bodyLarge,
-              decoration: InputDecoration(
-                border: const UnderlineInputBorder(),
-                focusedBorder: UnderlineInputBorder(
-                  borderSide: BorderSide(color: AppTheme.primaryColor),
-                ),
-                enabledBorder: UnderlineInputBorder(
-                  borderSide: BorderSide(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3)),
-                ),
-                contentPadding: EdgeInsets.zero,
-                isDense: true,
-                filled: true,
-                fillColor: Colors.transparent,
-              ),
-              onChanged: (value) =>
-                  _updateSet(exerciseIndex, setIndex, reps: int.tryParse(value)),
-            ),
-          ),
-          Expanded(
-            child: TextFormField(
-              initialValue: set.weight.toString(),
-              textAlign: TextAlign.center,
-              keyboardType: TextInputType.numberWithOptions(decimal: true),
-              style: Theme.of(context).textTheme.bodyLarge,
-              decoration: InputDecoration(
-                border: const UnderlineInputBorder(),
-                focusedBorder: UnderlineInputBorder(
-                  borderSide: BorderSide(color: AppTheme.primaryColor),
-                ),
-                enabledBorder: UnderlineInputBorder(
-                  borderSide: BorderSide(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3)),
-                ),
-                contentPadding: EdgeInsets.zero,
-                isDense: true,
-                filled: true,
-                fillColor: Colors.transparent,
-              ),
-              onChanged: (value) => _updateSet(exerciseIndex, setIndex,
-                  weight: double.tryParse(value)),
-            ),
-          ),
-          SizedBox(
-            width: 40,
-            child: Checkbox(
-              value: set.isCompleted,
-              onChanged: (value) =>
-                  _updateSet(exerciseIndex, setIndex, isCompleted: value),
-              activeColor: AppTheme.accentColor,
-            ),
-          ),
-          SizedBox(
-            width: 40,
-            child: IconButton(
-              icon: const Icon(Icons.close, size: 18, color: Colors.grey),
-              onPressed: () => _deleteSet(exerciseIndex, setIndex),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAddSetButton(BuildContext context, int exerciseIndex) {
-    return SizedBox(
-      width: double.infinity,
-      child: OutlinedButton.icon(
-        onPressed: () => _addSet(exerciseIndex),
-        icon: const Icon(Icons.add),
-        label: const Text('Add Set'),
-        style: OutlinedButton.styleFrom(
-          side: BorderSide(color: AppTheme.primaryColor.withOpacity(0.5)),
-          foregroundColor: AppTheme.primaryColor,
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAddExerciseButton(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 16.0),
-      child: SizedBox(
-        width: double.infinity,
-        child: ElevatedButton.icon(
-          onPressed: _addExercise,
-          icon: const Icon(Icons.add, color: Colors.white),
-          label: const Text(
-            'Add Exercise',
-            style: TextStyle(color: Colors.white),
-          ),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppTheme.primaryColor,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildWorkoutControls(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -780,34 +842,33 @@ class _WorkoutSessionPageState extends State<WorkoutSessionPage> {
                 onPressed: () async {
                   _stopTimer();
 
-                  // Calculate total stats
-                  double totalWeightLifted = _calculateWorkoutTotalWeight();
-                  int totalSets = _calculateWorkoutTotalSets();
-                  int totalReps = _calculateWorkoutTotalReps();
+                  final List<WorkoutExercise> exercisesToSave = exercises.map((e) => e.workoutExercise).toList();
 
-                  // Create the Workout object
+                  double totalWeightLifted = exercisesToSave.fold(0.0, (sum, woExercise) => sum + woExercise.sets.fold(0.0, (setSum, set) => setSum + (set.reps * set.weight)));
+                  int totalSets = exercisesToSave.fold(0, (sum, woExercise) => sum + woExercise.sets.length);
+                  int totalReps = exercisesToSave.fold(0, (sum, woExercise) => sum + woExercise.sets.fold(0, (setSum, set) => setSum + set.reps));
+
                   final workout = Workout(
                     id: _currentWorkoutId,
                     userId: _currentUserId!,
                     name: workoutName.isNotEmpty ? workoutName : 'Untitled Workout',
                     type: selectedType,
-                    exercises: exercises,
+                    exercises: exercisesToSave,
                     startTime: startTime,
                     endTime: DateTime.now(),
                     duration: elapsedTime,
-                    notes: null, // You can add a text field for notes later
+                    notes: null,
                     totalWeight: totalWeightLifted,
                     totalSets: totalSets,
                     totalReps: totalReps,
                   );
 
-                  // Dispatch SaveWorkout event
                   _workoutBloc.add(SaveWorkout(workout));
 
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Workout Ended and Saved!')),
                   );
-                  Navigator.of(context).pop(); // Go back to the previous page (Dashboard or Workout Selection)
+                  Navigator.of(context).pop();
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.accentColor,
@@ -840,6 +901,35 @@ class _WorkoutSessionPageState extends State<WorkoutSessionPage> {
           ],
         ),
       ),
+    );
+  }
+}
+
+extension IterableExtension<T> on Iterable<T> {
+  T? firstWhereOrNull(bool Function(T element) test) {
+    for (var element in this) {
+      if (test(element)) {
+        return element;
+      }
+    }
+    return null;
+  }
+}
+
+extension WorkoutExerciseCopyWith on WorkoutExercise {
+  WorkoutExercise copyWith({
+    String? id,
+    String? exerciseDefinitionId,
+    List<ExerciseSet>? sets,
+    String? notes,
+    Duration? restTime,
+  }) {
+    return WorkoutExercise(
+      id: id ?? this.id,
+      exerciseDefinitionId: exerciseDefinitionId ?? this.exerciseDefinitionId,
+      sets: sets ?? this.sets,
+      notes: notes ?? this.notes,
+      restTime: restTime ?? this.restTime,
     );
   }
 }

@@ -1,3 +1,5 @@
+// lib/core/config/app_config.dart
+
 class AppConfig {
   static const String appName = 'FwitGi';
   static const String appVersion = '1.0.0';
@@ -9,6 +11,7 @@ class AppConfig {
   static const String programsCollection = 'programs';
   static const String nutritionCollection = 'nutrition';
   static const String bodyTrackingCollection = 'body_tracking';
+  static const String exerciseDefinitionsCollection = 'exercise_definitions'; // ADD THIS LINE
 
   // Local Storage Keys
   static const String userDataBox = 'user_data';

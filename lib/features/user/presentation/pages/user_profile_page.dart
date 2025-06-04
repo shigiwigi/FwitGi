@@ -1,14 +1,16 @@
 // lib/features/user/presentation/pages/user_profile_page.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:fwitgi_app/core/di/dependency_injection.dart'; // For GetIt
-import 'package:fwitgi_app/core/models/user_model.dart'; // For UserModel, UserPreferences, UserStats
-import 'package:fwitgi_app/core/theme/app_theme.dart'; // For theme colors
-import 'package:fwitgi_app/core/theme/theme_cubit.dart'; // Import ThemeCubit
-import 'package:fwitgi_app/features/auth/presentation/bloc/auth_bloc.dart'; // For AuthBloc
-import 'package:fwitgi_app/features/auth/presentation/bloc/auth_state.dart'; // For AuthState
-import 'package:fwitgi_app/features/user/domain/repositories/user_repository.dart'; // For UserRepository
-import 'package:fwitgi_app/features/auth/data/repositories/user_repository_impl.dart'; // For the implementation
+import 'package:fwitgi_app/core/di/dependency_injection.dart';
+import 'package:fwitgi_app/core/models/user_model.dart';
+import 'package:fwitgi_app/core/theme/app_theme.dart';
+import 'package:fwitgi_app/core/theme/theme_cubit.dart';
+import 'package:fwitgi_app/features/auth/presentation/bloc/auth_bloc.dart';
+import 'package:fwitgi_app/features/auth/presentation/bloc/auth_state.dart';
+import 'package:fwitgi_app/features/user/domain/repositories/user_repository.dart';
+import 'package:fwitgi_app/features/auth/data/repositories/user_repository_impl.dart';
+import 'dart:async'; // ADD THIS IMPORT
 
 class UserProfilePage extends StatefulWidget {
   const UserProfilePage({super.key});
@@ -20,44 +22,50 @@ class UserProfilePage extends StatefulWidget {
 class _UserProfilePageState extends State<UserProfilePage> {
   UserModel? _currentUser;
   late UserRepository _userRepository;
-  late ThemeCubit _themeCubit; // Instance of ThemeCubit
+  late ThemeCubit _themeCubit;
 
-  // Controllers for editable fields
+  // Add StreamSubscriptions to manage them
+  late StreamSubscription _authStateSubscription; // ADD THIS
+  late StreamSubscription _themeModeSubscription; // ADD THIS
+
   late TextEditingController _nameController;
   late TextEditingController _dailyCalorieGoalController;
   late TextEditingController _dailyProteinGoalController;
 
   bool _darkModeEnabled = false;
-  String _selectedUnits = 'metric'; // Default to metric
+  String _selectedUnits = 'metric';
 
   @override
   void initState() {
     super.initState();
     _userRepository = getlt<UserRepository>();
-    _themeCubit = getlt<ThemeCubit>(); // Get ThemeCubit instance
+    _themeCubit = getlt<ThemeCubit>();
 
-    // Initialize with current user data if available
     _initializeUserData();
 
-    // Listen to AuthBloc changes to keep _currentUser updated
-    context.read<AuthBloc>().stream.listen((state) {
-      if (state is AuthAuthenticated) {
-        setState(() {
-          _currentUser = state.user;
-          _updateControllersAndStateFromUser();
-        });
-      } else if (state is AuthUnauthenticated) {
-        setState(() {
-          _currentUser = null;
-        });
+    // Store subscriptions to cancel them later
+    _authStateSubscription = context.read<AuthBloc>().stream.listen((state) { // UPDATED
+      if (mounted) { // Check if widget is still mounted before calling setState
+        if (state is AuthAuthenticated) {
+          setState(() {
+            _currentUser = state.user;
+            _updateControllersAndStateFromUser();
+          });
+        } else if (state is AuthUnauthenticated) {
+          setState(() {
+            _currentUser = null;
+          });
+        }
       }
     });
 
-    // Listen to ThemeCubit changes to keep _darkModeEnabled in sync
-    _themeCubit.stream.listen((themeMode) {
-      setState(() {
-        _darkModeEnabled = (themeMode == ThemeMode.dark);
-      });
+    // Store subscriptions to cancel them later
+    _themeModeSubscription = _themeCubit.stream.listen((themeMode) { // UPDATED
+      if (mounted) { // Check if widget is still mounted before calling setState
+        setState(() {
+          _darkModeEnabled = (themeMode == ThemeMode.dark);
+        });
+      }
     });
   }
 
@@ -92,6 +100,10 @@ class _UserProfilePageState extends State<UserProfilePage> {
 
   @override
   void dispose() {
+    // Cancel all subscriptions in dispose
+    _authStateSubscription.cancel(); // ADD THIS
+    _themeModeSubscription.cancel(); // ADD THIS
+
     _nameController.dispose();
     _dailyCalorieGoalController.dispose();
     _dailyProteinGoalController.dispose();
@@ -106,16 +118,14 @@ class _UserProfilePageState extends State<UserProfilePage> {
       return;
     }
 
-    // Create updated preferences and stats objects
     final updatedPreferences = UserPreferences(
-      darkMode: _darkModeEnabled, // Use the state variable
+      darkMode: _darkModeEnabled,
       units: _selectedUnits,
       dailyCalorieGoal: int.tryParse(_dailyCalorieGoalController.text) ?? _currentUser!.preferences.dailyCalorieGoal,
       dailyProteinGoal: int.tryParse(_dailyProteinGoalController.text) ?? _currentUser!.preferences.dailyProteinGoal,
-      workoutReminders: _currentUser!.preferences.workoutReminders, // Keep existing reminders
+      workoutReminders: _currentUser!.preferences.workoutReminders,
     );
 
-    // Create updated UserModel
     final updatedUser = UserModel(
       id: _currentUser!.id,
       email: _currentUser!.email,
@@ -123,17 +133,12 @@ class _UserProfilePageState extends State<UserProfilePage> {
       photoUrl: _currentUser!.photoUrl,
       createdAt: _currentUser!.createdAt,
       preferences: updatedPreferences,
-      stats: _currentUser!.stats, // Keep existing stats
+      stats: _currentUser!.stats,
     );
 
     try {
       await _userRepository.updateUser(updatedUser);
-      // Immediately update AuthBloc with the new user model to reflect changes across the app
-      context.read<AuthBloc>().add(AuthCheckRequested()); // Re-fetch or update current user in AuthBloc
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profile updated successfully!')),
-      );
+      context.read<AuthBloc>().add(AuthCheckRequested());
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to update profile: ${e.toString()}')),
@@ -156,7 +161,12 @@ class _UserProfilePageState extends State<UserProfilePage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.save),
-            onPressed: _updateUserProfile,
+            onPressed: () {
+              _updateUserProfile();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Profile updated successfully!')),
+              );
+            },
           ),
         ],
       ),
@@ -179,7 +189,7 @@ class _UserProfilePageState extends State<UserProfilePage> {
                     const SizedBox(height: 12),
                     TextFormField(
                       initialValue: _currentUser!.email,
-                      readOnly: true, // Email usually isn't edited directly here
+                      readOnly: true,
                       decoration: const InputDecoration(labelText: 'Email', enabled: false),
                     ),
                   ],
@@ -201,7 +211,8 @@ class _UserProfilePageState extends State<UserProfilePage> {
                         setState(() {
                           _darkModeEnabled = value;
                         });
-                        _themeCubit.setTheme(value); // Set theme via ThemeCubit
+                        _themeCubit.setTheme(value);
+                        _updateUserProfile();
                       },
                     ),
                     ListTile(
@@ -263,7 +274,6 @@ class _UserProfilePageState extends State<UserProfilePage> {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Logged out successfully.')),
                   );
-                  // AuthWrapper will handle navigation back to LoginPage
                 },
                 icon: const Icon(Icons.logout, color: Colors.white),
                 label: const Text('Logout', style: TextStyle(color: Colors.white)),
@@ -306,7 +316,6 @@ class _UserProfilePageState extends State<UserProfilePage> {
   }
 }
 
-// Extension to capitalize first letter of a string
 extension StringExtension on String {
   String capitalize() {
     if (isEmpty) return this;

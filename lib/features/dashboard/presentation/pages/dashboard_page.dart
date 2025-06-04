@@ -29,7 +29,6 @@ import 'package:fwitgi_app/features/nutrition/presentation/pages/nutrition_page.
 
 // Body Tracking Feature
 import 'package:fwitgi_app/features/body_tracking/presentation/bloc/body_tracking_bloc.dart';
-// Assuming body_tracking_event.dart is indeed under the nutrition feature path as discussed
 import 'package:fwitgi_app/features/nutrition/body_tracking/presentation/bloc/body_tracking_event.dart';
 import 'package:fwitgi_app/features/body_tracking/presentation/bloc/body_tracking_state.dart';
 import 'package:fwitgi_app/features/body_tracking/presentation/pages/body_tracking_page.dart';
@@ -37,8 +36,10 @@ import 'package:fwitgi_app/features/body_tracking/presentation/pages/body_tracki
 // User Feature
 import 'package:fwitgi_app/features/user/presentation/pages/user_profile_page.dart';
 
-// If you plan to create a ProgressPage, uncomment this line later.
-// import 'package:fwitgi_app/features/progress/presentation/pages/progress_page.dart';
+// New imports for ExerciseDefinition and its Repository
+import 'package:fwitgi_app/features/workout/domain/repositories/exercise_definition_repository.dart';
+import 'package:fwitgi_app/features/workout/domain/entities/exercise_definition.dart';
+
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({Key? key}) : super(key: key);
@@ -48,7 +49,6 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
-  // Helper getters to access theme colors using BuildContext
   Color _getOnSurfaceColor(BuildContext context) => Theme.of(context).colorScheme.onSurface;
   Color _getOnSurfaceVariantColor(BuildContext context) => Theme.of(context).colorScheme.onSurfaceVariant;
   Color _getCardColor(BuildContext context) => Theme.of(context).colorScheme.surfaceContainerHighest;
@@ -59,6 +59,10 @@ class _DashboardPageState extends State<DashboardPage> {
   late WorkoutBloc _workoutBloc;
   late NutritionBloc _nutritionBloc;
   late BodyTrackingBloc _bodyTrackingBloc;
+  late ExerciseDefinitionRepository _exerciseDefinitionRepository;
+
+  // Store fetched exercise definitions in a map for quick lookup
+  Map<String, ExerciseDefinition> _exerciseDefinitionsMap = {};
 
   @override
   void initState() {
@@ -67,14 +71,26 @@ class _DashboardPageState extends State<DashboardPage> {
     _workoutBloc = getlt<WorkoutBloc>();
     _nutritionBloc = getlt<NutritionBloc>();
     _bodyTrackingBloc = getlt<BodyTrackingBloc>();
+    _exerciseDefinitionRepository = getlt<ExerciseDefinitionRepository>();
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // Fetch all exercise definitions once when the dashboard loads
+      try {
+        final List<ExerciseDefinition> definitions = await _exerciseDefinitionRepository.getExerciseDefinitions();
+        setState(() {
+          _exerciseDefinitionsMap = { for (var def in definitions) def.id: def };
+        });
+      } catch (e) {
+        print('Error fetching exercise definitions: $e');
+        // Optionally show a snackbar or error message if definitions can't be loaded
+      }
+
       final authState = _authBloc.state;
       if (authState is AuthAuthenticated) {
         final String userId = authState.user.id;
         _workoutBloc.add(LoadWorkouts(userId));
         _nutritionBloc.add(LoadDailyNutritionEvent(userId: userId, date: DateTime.now()));
-        _bodyTrackingBloc.add(LoadBodyStatsEvent(userId)); // Corrected Event for BodyTracking
+        _bodyTrackingBloc.add(LoadBodyStatsEvent(userId));
         _workoutBloc.add(LoadWorkoutTemplates(userId));
       }
     });
@@ -82,7 +98,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
   @override
   Widget build(BuildContext context) {
-    const int currentIndex = 0; // Home is selected
+    const int currentIndex = 0;
 
     return Scaffold(
       body: CustomScrollView(
@@ -139,7 +155,6 @@ class _DashboardPageState extends State<DashboardPage> {
 
                 final authBlocState = context.read<AuthBloc>().state;
                 if (authBlocState is! AuthAuthenticated) {
-                    // This should ideally be handled by AuthWrapper, but as a fallback:
                     return const SliverFillRemaining(
                         child: Center(child: Text("User not authenticated.")));
                 }
@@ -162,10 +177,11 @@ class _DashboardPageState extends State<DashboardPage> {
                     const SizedBox(height: 24),
                     _buildQuickActions(context),
                     const SizedBox(height: 24),
+                    // Pass the map of exercise definitions to _buildRecentWorkouts
                     _buildRecentWorkouts(context, recentWorkouts),
                     const SizedBox(height: 24),
                     _buildProgressChart(context, weeklyWorkoutSummary, currentUser),
-                    const SizedBox(height: 100), // Added padding for FAB
+                    const SizedBox(height: 100),
                   ]),
                 );
               },
@@ -180,7 +196,7 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Widget _buildAppBar(BuildContext context, UserModel? currentUser) {
-    String greetingName = currentUser?.name.split(' ').first ?? 'User';
+    String greetingName = currentUser?.name ?? 'User';
 
     return SliverAppBar(
       expandedHeight: 180,
@@ -443,6 +459,11 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Widget _buildRecentWorkouts(BuildContext context, List<Workout> recentWorkouts) {
+    // Helper to get exercise name from its definition ID
+    String getExerciseName(String exerciseDefinitionId) {
+      return _exerciseDefinitionsMap[exerciseDefinitionId]?.name ?? 'Unknown Exercise';
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -477,12 +498,18 @@ class _DashboardPageState extends State<DashboardPage> {
         else
           Column(
             children: recentWorkouts.map((workout) {
+              // Get names of the first 2 exercises from the workout
+              // Now workout.exercises is List<WorkoutExercise>
+              final String exerciseSummary = workout.exercises.take(2).map((woExercise) {
+                return getExerciseName(woExercise.exerciseDefinitionId); // Use helper function
+              }).join(', ') + (workout.exercises.length > 2 ? '...' : '');
+
               return Padding(
                 padding: const EdgeInsets.only(bottom: 12.0),
                 child: _buildWorkoutCard(
                   context,
                   workout.name,
-                  workout.exercises.map((e) => e.name).take(2).join(', ') + (workout.exercises.length > 2 ? '...' : ''),
+                  exerciseSummary, // Pass the formatted exercise summary
                   '${workout.duration.inMinutes}m',
                   '${(workout.totalWeight).toStringAsFixed(1)} kg',
                   Icons.fitness_center,
@@ -536,12 +563,16 @@ class _DashboardPageState extends State<DashboardPage> {
               children: [
                 Row(
                   children: [
-                    Text(
-                      title,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: _getOnSurfaceColor(context),
-                          ),
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: _getOnSurfaceColor(context),
+                            ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                     if (isCompleted)
                       Padding(
@@ -559,6 +590,8 @@ class _DashboardPageState extends State<DashboardPage> {
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: _getOnSurfaceVariantColor(context),
                       ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
@@ -576,6 +609,8 @@ class _DashboardPageState extends State<DashboardPage> {
                           color: _getOnSurfaceVariantColor(context),
                           fontWeight: FontWeight.w500,
                         ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
@@ -590,6 +625,8 @@ class _DashboardPageState extends State<DashboardPage> {
                           color: _getOnSurfaceVariantColor(context),
                           fontWeight: FontWeight.w500,
                         ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
@@ -868,26 +905,25 @@ class _DashboardPageState extends State<DashboardPage> {
                   );
               }),
               _buildNavItem(context, Icons.fitness_center, 'Workouts', 1, currentIndex, () {
-                Navigator.pushReplacement(
+                Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => const WorkoutHistoryPage()),
                 );
               }),
               _buildNavItem(context, Icons.restaurant, 'Nutrition', 2, currentIndex, () {
-                Navigator.pushReplacement(
+                Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => const NutritionPage()),
                 );
               }),
               _buildNavItem(context, Icons.analytics, 'Progress', 3, currentIndex, () {
-                // ProgressPage might be a better fit here if it exists
-                Navigator.pushReplacement(
+                Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const WorkoutHistoryPage()), // Placeholder
+                  MaterialPageRoute(builder: (context) => const WorkoutHistoryPage()),
                 );
               }),
               _buildNavItem(context, Icons.person, 'Profile', 4, currentIndex, () {
-                Navigator.pushReplacement(
+                Navigator.push(
                   context,
                   MaterialPageRoute(builder: (context) => const UserProfilePage()),
                 );
@@ -937,5 +973,17 @@ class _DashboardPageState extends State<DashboardPage> {
         ),
       ),
     );
+  }
+}
+
+// Extension to find first element or return null (similar to .firstWhereOrNull in newer Dart)
+extension IterableExtension<T> on Iterable<T> {
+  T? firstWhereOrNull(bool Function(T element) test) {
+    for (var element in this) {
+      if (test(element)) {
+        return element;
+      }
+    }
+    return null;
   }
 }

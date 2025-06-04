@@ -1,3 +1,5 @@
+// lib/main.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -11,23 +13,26 @@ import 'simple_bloc_observer.dart';
 
 import 'features/auth/presentation/bloc/auth_bloc.dart';
 import 'core/common/widgets/auth_wrapper.dart';
-// Add these imports for WorkoutBloc and NutritionBloc
 import 'features/workout/presentation/bloc/workout_bloc.dart';
 import 'features/nutrition/presentation/bloc/nutrition_bloc.dart';
-import 'features/body_tracking/presentation/bloc/body_tracking_bloc.dart'; // Make sure this is also imported if used
+import 'features/body_tracking/presentation/bloc/body_tracking_bloc.dart';
+import 'core/theme/theme_cubit.dart';
+
+// Import ExerciseDefinitionRepository to call seed method
+import 'features/workout/domain/repositories/exercise_definition_repository.dart'; // ADD THIS
 
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Firebase
   await Firebase.initializeApp();
-
-  // Initialize Hive
   await Hive.initFlutter();
-
-  // Initialize dependency injection
   await di.DependencyInjection.init();
+
+  // Call the data seeding function here
+  // Ensure ExerciseDefinitionRepository is initialized before calling seed
+  final ExerciseDefinitionRepository exerciseDefRepo = di.getlt<ExerciseDefinitionRepository>();
+  await exerciseDefRepo.seedInitialDefinitions(); // ADD THIS LINE
 
   Bloc.observer = SimpleBlocObserver();
 
@@ -44,24 +49,30 @@ class FwitGiApp extends StatelessWidget {
         BlocProvider<AuthBloc>(
           create: (context) => di.getlt<AuthBloc>()..add(AuthCheckRequested()),
         ),
-        // UNCOMMENTED: WorkoutBloc and NutritionBloc
         BlocProvider<WorkoutBloc>(
           create: (context) => di.getlt<WorkoutBloc>(),
         ),
         BlocProvider<NutritionBloc>(
           create: (context) => di.getlt<NutritionBloc>(),
         ),
-        BlocProvider<BodyTrackingBloc>( // Assuming you also want to provide this
+        BlocProvider<BodyTrackingBloc>(
           create: (context) => di.getlt<BodyTrackingBloc>(),
         ),
+        BlocProvider<ThemeCubit>(
+          create: (context) => di.getlt<ThemeCubit>(),
+        ),
       ],
-      child: MaterialApp(
-        title: AppConfig.appName,
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.lightTheme,
-        darkTheme: AppTheme.darkTheme,
-        themeMode: ThemeMode.system,
-        home: const AuthWrapper(),
+      child: BlocBuilder<ThemeCubit, ThemeMode>(
+        builder: (context, themeMode) {
+          return MaterialApp(
+            title: AppConfig.appName,
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.lightTheme,
+            darkTheme: AppTheme.darkTheme,
+            themeMode: themeMode,
+            home: const AuthWrapper(),
+          );
+        },
       ),
     );
   }

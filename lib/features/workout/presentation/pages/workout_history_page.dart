@@ -1,18 +1,19 @@
 // lib/features/workout/presentation/pages/workout_history_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:intl/intl.dart'; // For date formatting
-import 'package:fwitgi_app/core/di/dependency_injection.dart'; // For GetIt
-import 'package:fwitgi_app/core/theme/app_theme.dart'; // For theme colors
-import 'package:fwitgi_app/features/auth/presentation/bloc/auth_bloc.dart'; // For AuthBloc
-import 'package:fwitgi_app/features/auth/presentation/bloc/auth_state.dart'; // For AuthState
-import 'package:fwitgi_app/features/workout/domain/entities/workout.dart'; // For Workout entity
-import 'package:fwitgi_app/features/workout/presentation/bloc/workout_bloc.dart'; // For WorkoutBloc
-// REMOVE: import 'package:fwitgi_app/features/workout/presentation/pages/workout_session_page.dart'; // To view workout details // Not used directly in this snippet for fixing errors
-
-// ADD THESE IMPORTS:
+import 'package:intl/intl.dart';
+import 'package:fwitgi_app/core/di/dependency_injection.dart';
+import 'package:fwitgi_app/core/theme/app_theme.dart';
+import 'package:fwitgi_app/features/auth/presentation/bloc/auth_bloc.dart';
+import 'package:fwitgi_app/features/auth/presentation/bloc/auth_state.dart';
+import 'package:fwitgi_app/features/workout/domain/entities/workout.dart';
+import 'package:fwitgi_app/features/workout/presentation/bloc/workout_bloc.dart';
 import 'package:fwitgi_app/features/workout/presentation/bloc/workout_event.dart';
 import 'package:fwitgi_app/features/workout/presentation/bloc/workout_state.dart';
+
+// New imports for ExerciseDefinition and its Repository
+import 'package:fwitgi_app/features/workout/domain/repositories/exercise_definition_repository.dart'; // ADD THIS
+import 'package:fwitgi_app/features/workout/domain/entities/exercise_definition.dart'; // ADD THIS
 
 class WorkoutHistoryPage extends StatefulWidget {
   const WorkoutHistoryPage({super.key});
@@ -24,25 +25,47 @@ class WorkoutHistoryPage extends StatefulWidget {
 class _WorkoutHistoryPageState extends State<WorkoutHistoryPage> {
   late WorkoutBloc _workoutBloc;
   String? _currentUserId;
+  late ExerciseDefinitionRepository _exerciseDefinitionRepository; // ADD THIS
+
+  // Store fetched exercise definitions in a map for quick lookup
+  Map<String, ExerciseDefinition> _exerciseDefinitionsMap = {}; // ADD THIS
 
   @override
   void initState() {
     super.initState();
     _workoutBloc = getlt<WorkoutBloc>();
+    _exerciseDefinitionRepository = getlt<ExerciseDefinitionRepository>(); // INITIALIZE THIS
 
-    final authState = context.read<AuthBloc>().state;
-    if (authState is AuthAuthenticated) {
-      _currentUserId = authState.user.id;
-      // LoadWorkouts event should now be recognized
-      _workoutBloc.add(LoadWorkouts(_currentUserId!));
-    } else {
-      _currentUserId = null;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please sign in to view your workout history.')),
-        );
-      });
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) async { // Make async
+      // Fetch all exercise definitions once when the page loads
+      try {
+        final List<ExerciseDefinition> definitions = await _exerciseDefinitionRepository.getExerciseDefinitions();
+        setState(() {
+          _exerciseDefinitionsMap = { for (var def in definitions) def.id: def };
+        });
+      } catch (e) {
+        print('Error fetching exercise definitions for history: $e');
+        // Optionally show an error message
+      }
+
+      final authState = context.read<AuthBloc>().state;
+      if (authState is AuthAuthenticated) {
+        _currentUserId = authState.user.id;
+        _workoutBloc.add(LoadWorkouts(_currentUserId!));
+      } else {
+        _currentUserId = null;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Please sign in to view your workout history.')),
+          );
+        });
+      }
+    });
+  }
+
+  // Helper to get exercise name from its definition ID (if needed for detailed view)
+  String _getExerciseName(String exerciseDefinitionId) {
+    return _exerciseDefinitionsMap[exerciseDefinitionId]?.name ?? 'Unknown Exercise';
   }
 
   @override
@@ -53,11 +76,9 @@ class _WorkoutHistoryPageState extends State<WorkoutHistoryPage> {
       ),
       body: _currentUserId == null
           ? const Center(child: Text('Please log in to view your workout history.'))
-          // WorkoutState should now be recognized
           : BlocConsumer<WorkoutBloc, WorkoutState>(
               bloc: _workoutBloc,
               listener: (context, state) {
-                // WorkoutError should now be recognized
                 if (state is WorkoutError) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text('Error loading workouts: ${state.message}')),
@@ -65,10 +86,8 @@ class _WorkoutHistoryPageState extends State<WorkoutHistoryPage> {
                 }
               },
               builder: (context, state) {
-                // WorkoutLoading should now be recognized
                 if (state is WorkoutLoading) {
                   return const Center(child: CircularProgressIndicator());
-                  // WorkoutLoaded should now be recognized
                 } else if (state is WorkoutLoaded) {
                   if (state.workouts.isEmpty) {
                     return const Center(child: Text('No past workouts found. Start logging!'));
@@ -90,9 +109,13 @@ class _WorkoutHistoryPageState extends State<WorkoutHistoryPage> {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(content: Text('Tapped on "${workout.name}"')),
                             );
-                            // Example: Navigate to a detailed view
+                            // Example: To view detailed exercises within the workout history
+                            // You would pass the workout and use _exerciseDefinitionsMap to display names
                             /*
-                            Navigator.push(context, MaterialPageRoute(builder: (context) => WorkoutDetailView(workout: workout)));
+                            Navigator.push(context, MaterialPageRoute(builder: (context) => WorkoutDetailView(
+                                workout: workout,
+                                exerciseDefinitionsMap: _exerciseDefinitionsMap, // Pass the map
+                            )));
                             */
                           },
                           child: Padding(
