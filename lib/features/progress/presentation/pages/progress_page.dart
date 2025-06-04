@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fl_chart/fl_chart.dart'; // For the bar chart
 import 'package:intl/intl.dart'; // For date formatting
+import 'package:cloud_firestore/cloud_firestore.dart'; // ADD THIS IMPORT
 
 // Core and Theme
 import 'package:fwitgi_app/core/theme/app_theme.dart';
@@ -20,10 +21,12 @@ import 'package:fwitgi_app/features/workout/presentation/bloc/workout_state.dart
 
 // Nutrition Feature (for daily calorie goal/summary)
 import 'package:fwitgi_app/features/nutrition/presentation/bloc/nutrition_bloc.dart';
+import 'package:fwitgi_app/features/nutrition/presentation/bloc/nutrition_event.dart'; // ADD THIS IMPORT
 import 'package:fwitgi_app/features/nutrition/presentation/bloc/nutrition_state.dart';
 
 // Body Tracking Feature (for body stats history)
 import 'package:fwitgi_app/features/body_tracking/presentation/bloc/body_tracking_bloc.dart';
+import 'package:fwitgi_app/features/nutrition/body_tracking/presentation/bloc/body_tracking_event.dart'; // ADD THIS IMPORT
 import 'package:fwitgi_app/features/body_tracking/presentation/bloc/body_tracking_state.dart';
 
 class ProgressPage extends StatefulWidget {
@@ -69,7 +72,7 @@ class _ProgressPageState extends State<ProgressPage> {
           return BlocBuilder<WorkoutBloc, WorkoutState>(
             builder: (context, workoutState) {
               final nutritionState = context.watch<NutritionBloc>().state;
-              final bodyTrackingState = context.watch<BodyTrackingBloc>().state;
+              final bodyTrackingState = context.watch<BodyTrackingBloc>().state; // Ensure this is locally scoped
 
               if (workoutState is WorkoutLoading || nutritionState is NutritionLoading || bodyTrackingState is BodyTrackingLoading) {
                 return const Center(child: CircularProgressIndicator());
@@ -83,7 +86,7 @@ class _ProgressPageState extends State<ProgressPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildOverallStatsCard(context, currentUser, nutritionState),
+                    _buildOverallStatsCard(context, currentUser, nutritionState, bodyTrackingState), // Pass bodyTrackingState
                     const SizedBox(height: 24),
                     _buildProgressChart(context, weeklyWorkoutSummary, currentUser),
                     const SizedBox(height: 24),
@@ -99,7 +102,7 @@ class _ProgressPageState extends State<ProgressPage> {
     );
   }
 
-  Widget _buildOverallStatsCard(BuildContext context, UserModel currentUser, NutritionState nutritionState) {
+  Widget _buildOverallStatsCard(BuildContext context, UserModel currentUser, NutritionState nutritionState, BodyTrackingState bodyTrackingState) {
     double dailyCalories = 0;
     if (nutritionState is NutritionLoaded) {
       dailyCalories = nutritionState.dailySummary['calories'] ?? 0;
@@ -392,7 +395,7 @@ class _ProgressPageState extends State<ProgressPage> {
               child: ListTile(
                 title: Text('Weight: ${stat['weight']?.toStringAsFixed(1) ?? 'N/A'} kg'),
                 subtitle: Text(
-                  'Logged on: ${DateFormat('MMM d, yyyy HH:mm').format(timestamp)}\n'
+                  'Logged on: ${DateFormat('MMM d,yyyy HH:mm').format(timestamp)}\n'
                       'Neck: ${stat['neck']?.toStringAsFixed(1) ?? 0} cm | '
                       'Chest: ${stat['chest']?.toStringAsFixed(1) ?? 0} cm | '
                       'Waist: ${stat['waist']?.toStringAsFixed(1) ?? 0} cm | '
@@ -401,7 +404,7 @@ class _ProgressPageState extends State<ProgressPage> {
                 isThreeLine: true,
                 onTap: () {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Tapped on stats from ${DateFormat('MMM d, yyyy').format(timestamp)}')),
+                    SnackBar(content: Text('Tapped on stats from ${DateFormat('MMM d,yyyy').format(timestamp)}')),
                   );
                 },
               ),
