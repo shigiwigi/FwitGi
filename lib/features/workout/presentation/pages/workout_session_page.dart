@@ -1,16 +1,17 @@
 // lib/features/workout/presentation/pages/workout_session_page.dart
 import 'package:flutter/material.dart';
-import 'dart:async'; // For Timer
-import 'package:uuid/uuid.dart'; // For generating unique IDs
-import 'package:flutter_bloc/flutter_bloc.dart'; // For Bloc access
-import 'package:fwitgi_app/core/di/dependency_injection.dart'; // For GetIt
-import 'package:fwitgi_app/features/workout/presentation/bloc/workout_bloc.dart'; // Workout Bloc
-import 'package:fwitgi_app/features/auth/presentation/bloc/auth_bloc.dart'; // Auth Bloc
-import 'package:fwitgi_app/features/auth/presentation/bloc/auth_state.dart'; // For AuthState
+import 'dart:async';
+import 'package:uuid/uuid.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:fwitgi_app/core/di/dependency_injection.dart';
+import 'package:fwitgi_app/features/workout/presentation/bloc/workout_bloc.dart';
+import 'package:fwitgi_app/features/auth/presentation/bloc/auth_bloc.dart';
+import 'package:fwitgi_app/features/auth/presentation/bloc/auth_state.dart';
+import 'package:fwitgi_app/features/workout/presentation/bloc/workout_event.dart'; // <-- ADD THIS IMPORT
 
-import '../../../../core/theme/app_theme.dart'; // Adjust path as necessary
-import '../../domain/entities/workout.dart'; // Import the workout entities
-import '../../domain/repositories/workout_repository.dart'; // Import WorkoutRepository
+import '../../../../core/theme/app_theme.dart';
+import '../../domain/entities/workout.dart';
+import '../../domain/repositories/workout_repository.dart';
 
 class WorkoutSessionPage extends StatefulWidget {
   final String? workoutTemplateId; // Can be used to load a template

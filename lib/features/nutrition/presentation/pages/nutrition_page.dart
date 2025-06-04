@@ -1,12 +1,15 @@
 // lib/features/nutrition/presentation/pages/nutrition_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:intl/intl.dart'; // For date formatting
-import 'package:fwitgi_app/core/di/dependency_injection.dart'; // For GetIt
-import 'package:fwitgi_app/features/auth/presentation/bloc/auth_bloc.dart'; // For AuthBloc
-import 'package:fwitgi_app/features/auth/presentation/bloc/auth_state.dart'; // For AuthState
-import 'package:fwitgi_app/features/nutrition/presentation/bloc/nutrition_bloc.dart'; // For NutritionBloc
-import 'package:fwitgi_app/core/theme/app_theme.dart'; // For theme colors
+import 'package:intl/intl.dart';
+import 'package:fwitgi_app/core/di/dependency_injection.dart';
+import 'package:fwitgi_app/features/auth/presentation/bloc/auth_bloc.dart';
+import 'package:fwitgi_app/features/auth/presentation/bloc/auth_state.dart';
+import 'package:fwitgi_app/features/nutrition/presentation/bloc/nutrition_bloc.dart';
+// Import NutritionEvent if you dispatch events from here, and NutritionState for type checking
+import 'package:fwitgi_app/features/nutrition/presentation/bloc/nutrition_event.dart';
+import 'package:fwitgi_app/features/nutrition/presentation/bloc/nutrition_state.dart'; // <-- ADD THIS IMPORT
+import 'package:fwitgi_app/core/theme/app_theme.dart';
 
 class NutritionPage extends StatefulWidget {
   const NutritionPage({super.key});
