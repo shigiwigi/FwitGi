@@ -1,13 +1,16 @@
 // lib/features/body_tracking/presentation/pages/body_tracking_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:intl/intl.dart'; // For date formatting
-import 'package:cloud_firestore/cloud_firestore.dart'; 
-import 'package:fwitgi_app/core/di/dependency_injection.dart'; // For GetIt
-import 'package:fwitgi_app/features/auth/presentation/bloc/auth_bloc.dart'; // For AuthBloc
-import 'package:fwitgi_app/features/auth/presentation/bloc/auth_state.dart'; // For AuthState
-import 'package:fwitgi_app/features/body_tracking/presentation/bloc/body_tracking_bloc.dart'; // For BodyTrackingBloc
-import 'package:fwitgi_app/core/theme/app_theme.dart'; // For theme colors
+import 'package:intl/intl.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:fwitgi_app/core/di/dependency_injection.dart';
+import 'package:fwitgi_app/features/auth/presentation/bloc/auth_bloc.dart';
+import 'package:fwitgi_app/features/auth/presentation/bloc/auth_state.dart';
+import 'package:fwitgi_app/features/body_tracking/presentation/bloc/body_tracking_bloc.dart';
+// Import BodyTrackingEvent for dispatching, and BodyTrackingState for type checking
+import 'package:fwitgi_app/features/nutrition/body_tracking/presentation/bloc/body_tracking_event.dart'; // This is the current path for events
+import 'package:fwitgi_app/features/body_tracking/presentation/bloc/body_tracking_state.dart'; // <-- ADD THIS IMPORT
+import 'package:fwitgi_app/core/theme/app_theme.dart';
 
 class BodyTrackingPage extends StatefulWidget {
   const BodyTrackingPage({super.key});
