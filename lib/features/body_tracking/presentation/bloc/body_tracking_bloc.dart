@@ -2,6 +2,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 
 import '../../domain/repositories/body_tracking_repository.dart';
+import 'package:fwitgi_app/features/body_tracking/presentation/bloc/body_tracking_state.dart'; // Import the states
 
 // Body Tracking Events
 abstract class BodyTrackingEvent extends Equatable {
@@ -23,28 +24,6 @@ class LoadBodyStatsEvent extends BodyTrackingEvent {
   const LoadBodyStatsEvent(this.userId);
   @override
   List<Object> get props => [userId];
-}
-
-// Body Tracking States
-abstract class BodyTrackingState extends Equatable {
-  const BodyTrackingState();
-  @override
-  List<Object> get props => [];
-}
-
-class BodyTrackingInitial extends BodyTrackingState {}
-class BodyTrackingLoading extends BodyTrackingState {}
-class BodyTrackingLoaded extends BodyTrackingState {
-  final List<Map<String, dynamic>> statsHistory;
-  const BodyTrackingLoaded(this.statsHistory);
-  @override
-  List<Object> get props => [statsHistory];
-}
-class BodyTrackingError extends BodyTrackingState {
-  final String message;
-  const BodyTrackingError(this.message);
-  @override
-  List<Object> get props => [message];
 }
 
 /// BLoC for managing body tracking-related states and events.

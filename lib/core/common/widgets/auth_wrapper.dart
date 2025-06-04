@@ -5,7 +5,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fwitgi_app/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:fwitgi_app/features/auth/presentation/bloc/auth_state.dart';
 import 'package:fwitgi_app/features/auth/presentation/pages/login_page.dart';
-import 'package:fwitgi_app/features/home/presentation/pages/home_page.dart'; // <--- ADD THIS IMPORT for HomePage
+import 'package:fwitgi_app/features/dashboard/presentation/pages/dashboard_page.dart'; // <--- CHANGE THIS IMPORT TO DashboardPage
+// import 'package:fwitgi_app/features/home/presentation/pages/home_page.dart'; // <--- REMOVE THIS IMPORT
 
 class AuthWrapper extends StatelessWidget {
   const AuthWrapper({super.key});
@@ -39,8 +40,8 @@ class AuthWrapper extends StatelessWidget {
             body: Center(child: CircularProgressIndicator()),
           );
         } else if (state is AuthAuthenticated) {
-          // <--- CHANGE THIS: Return the actual HomePage
-          return const HomePage();
+          // <--- CHANGE THIS: Return the actual DashboardPage
+          return const DashboardPage();
         } else if (state is AuthUnauthenticated || state is AuthFailure) {
           // If unauthenticated or authentication failed, show the LoginPage
           return const LoginPage();

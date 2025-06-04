@@ -2,7 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../../core/config/app_config.dart';
 import '../../../../core/models/user_model.dart';
-import '../../user/domain/repositories/user_repository.dart'; // Ensure this path is correct
+// FIX: Corrected import path for UserRepository
+import 'package:fwitgi_app/features/user/domain/repositories/user_repository.dart';
 
 /// Concrete implementation of [UserRepository] using Firestore.
 class UserRepositoryImpl implements UserRepository {

@@ -75,19 +75,20 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     AuthCheckRequested event,
     Emitter<AuthState> emit,
   ) async {
+    print('AuthBloc: AuthCheckRequested received. Emitting AuthLoading.');
     emit(AuthLoading());
     try {
       final user = await getUserUseCase();
       if (user != null) {
+        print('AuthBloc: AuthCheck success. User authenticated: ${user.email}. Emitting AuthAuthenticated.');
         emit(AuthAuthenticated(user: user));
       } else {
+        print('AuthBloc: AuthCheck failed. No user found. Emitting AuthUnauthenticated.');
         emit(AuthUnauthenticated());
       }
     } catch (e) {
-      // FIX 1: Emit AuthFailure with message for initial check failure
-      // Or, if you specifically want no message for initial unauthenticated, just emit AuthUnauthenticated()
-      // I'll suggest AuthFailure here for better error communication.
-      emit(AuthFailure(e.toString())); // <--- Changed from AuthUnauthenticated(e.toString())
+      print('AuthBloc: AuthCheck failed with error: $e. Emitting AuthFailure.');
+      emit(AuthFailure(e.toString()));
     }
   }
 
@@ -95,12 +96,15 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     SignInRequested event,
     Emitter<AuthState> emit,
   ) async {
+    print('AuthBloc: SignInRequested received for email: ${event.email}. Emitting AuthLoading.');
     emit(AuthLoading());
     try {
       final user = await signInUseCase(event.email, event.password);
+      print('AuthBloc: SignIn successful. User authenticated: ${user.email}. Emitting AuthAuthenticated.');
       emit(AuthAuthenticated(user: user));
     } catch (e) {
-      emit(AuthFailure(e.toString())); // <--- FIX 2: Removed 'message:'
+      print('AuthBloc: SignIn failed with error: $e. Emitting AuthFailure.');
+      emit(AuthFailure(e.toString()));
     }
   }
 
@@ -108,12 +112,15 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     SignUpRequested event,
     Emitter<AuthState> emit,
   ) async {
+    print('AuthBloc: SignUpRequested received for email: ${event.email}. Emitting AuthLoading.');
     emit(AuthLoading());
     try {
       final user = await signUpUseCase(event.email, event.password, event.name);
+      print('AuthBloc: SignUp successful. User authenticated: ${user.email}. Emitting AuthAuthenticated.');
       emit(AuthAuthenticated(user: user));
     } catch (e) {
-      emit(AuthFailure(e.toString())); // <--- FIX 2: Removed 'message:'
+      print('AuthBloc: SignUp failed with error: $e. Emitting AuthFailure.');
+      emit(AuthFailure(e.toString()));
     }
   }
 
@@ -121,11 +128,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     SignOutRequested event,
     Emitter<AuthState> emit,
   ) async {
+    print('AuthBloc: SignOutRequested received. Attempting sign out.');
     try {
       await signOutUseCase();
+      print('AuthBloc: SignOut successful. Emitting AuthUnauthenticated.');
       emit(AuthUnauthenticated());
     } catch (e) {
-      emit(AuthFailure(e.toString())); // <--- FIX 2: Removed 'message:'
+      print('AuthBloc: SignOut failed with error: $e. Emitting AuthFailure.');
+      emit(AuthFailure(e.toString()));
     }
   }
 }

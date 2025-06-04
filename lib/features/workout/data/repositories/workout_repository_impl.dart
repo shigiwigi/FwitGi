@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart'; // Import for DateFormat
 
 import '../../../../core/config/app_config.dart';
 import '../../domain/entities/workout.dart';
@@ -14,7 +15,7 @@ class WorkoutRepositoryImpl implements WorkoutRepository {
       final query = await _firestore
           .collection(AppConfig.workoutsCollection)
           .where('userId', isEqualTo: userId)
-          // .orderBy('startTime', descending: true) // Removed orderBy to avoid index issues
+          // .orderBy('startTime', descending: true) // Re-add if you have Firestore index configured
           .get();
 
       return query.docs.map((doc) => _workoutFromFirestore(doc)).toList();
@@ -51,8 +52,39 @@ class WorkoutRepositoryImpl implements WorkoutRepository {
   Future<List<Workout>> getWorkoutTemplates() async {
     // This implementation can be expanded later to fetch from a specific
     // 'workout_templates' collection or a flag on the 'workouts' collection.
-    // For now, it returns an empty list as per the PDF.
+    // For now, it returns an empty list.
     return [];
+  }
+
+  @override
+  Future<Map<String, double>> getWorkoutSummaryForPeriod(String userId, DateTime startDate, DateTime endDate) async {
+    print('DEBUG: getWorkoutSummaryForPeriod called for userId: $userId, startDate: $startDate, endDate: $endDate'); // Add print
+    try {
+      final querySnapshot = await _firestore
+          .collection(AppConfig.workoutsCollection)
+          .where('userId', isEqualTo: userId)
+          .where('startTime', isGreaterThanOrEqualTo: Timestamp.fromDate(startDate))
+          .where('startTime', isLessThanOrEqualTo: Timestamp.fromDate(endDate))
+          // .orderBy('startTime') // Add if you have Firestore index configured
+          .get();
+
+      print('DEBUG: getWorkoutSummaryForPeriod received ${querySnapshot.docs.length} documents.'); // Add print
+
+      final Map<String, double> dailyTotals = {};
+      final DateFormat formatter = DateFormat('yyyy-MM-dd');
+
+      for (var doc in querySnapshot.docs) {
+        final workout = _workoutFromFirestore(doc);
+        final dateKey = formatter.format(workout.startTime);
+        dailyTotals.update(dateKey, (value) => value + workout.totalWeight, ifAbsent: () => workout.totalWeight);
+        print('DEBUG: Processing workout ID: ${workout.id}, startTime: ${workout.startTime}, totalWeight: ${workout.totalWeight}, dateKey: $dateKey'); // Add print
+      }
+      print('DEBUG: Final dailyTotals: $dailyTotals'); // Add print
+      return dailyTotals;
+    } catch (e) {
+      print('ERROR: Failed to get workout summary: $e'); // Add print
+      throw Exception('Failed to get workout summary: ${e.toString()}');
+    }
   }
 
   /// Converts a Firestore [DocumentSnapshot] into a [Workout] object.

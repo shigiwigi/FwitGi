@@ -19,4 +19,10 @@ abstract class WorkoutRepository {
 
   /// Retrieves a list of pre-defined workout templates.
   Future<List<Workout>> getWorkoutTemplates();
+
+  /// Retrieves a summary of total weight lifted per day for a specific period.
+  ///
+  /// Returns a Map where keys are dates (e.g., 'YYYY-MM-DD') and values are
+  /// the total weight lifted on that day.
+  Future<Map<String, double>> getWorkoutSummaryForPeriod(String userId, DateTime startDate, DateTime endDate);
 }

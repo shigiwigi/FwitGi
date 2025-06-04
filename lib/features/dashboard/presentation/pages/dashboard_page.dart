@@ -1,12 +1,34 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:fl_chart/fl_chart.dart'; // For the bar chart
+import 'package:intl/intl.dart'; // For date formatting
+
 import '../../../../core/theme/app_theme.dart';
 import 'package:fwitgi_app/features/workout/presentation/pages/workout_selection_page.dart';
 import 'package:fwitgi_app/features/workout/presentation/pages/workout_session_page.dart';
+import 'package:fwitgi_app/core/di/dependency_injection.dart'; // For GetIt access
+import 'package:fwitgi_app/core/models/user_model.dart'; // For UserModel
+import 'package:fwitgi_app/features/auth/presentation/bloc/auth_bloc.dart'; // For AuthBloc
+import 'package:fwitgi_app/features/auth/presentation/bloc/auth_state.dart'; // For AuthState
+import 'package:fwitgi_app/features/workout/presentation/bloc/workout_bloc.dart'; // For WorkoutBloc
+import 'package:fwitgi_app/features/workout/presentation/bloc/workout_state.dart'; // Added missing import
+import 'package:fwitgi_app/features/workout/presentation/bloc/workout_event.dart'; // Added missing import
+import 'package:fwitgi_app/features/workout/domain/entities/workout.dart'; // For Workout entity
+import 'package:fwitgi_app/features/nutrition/presentation/bloc/nutrition_bloc.dart'; // For NutritionBloc
+import 'package:fwitgi_app/features/nutrition/presentation/bloc/nutrition_state.dart'; // For NutritionState
+import 'package:fwitgi_app/features/nutrition/presentation/bloc/nutrition_event.dart'; // Added missing import
+import 'package:fwitgi_app/features/body_tracking/presentation/bloc/body_tracking_bloc.dart';
+import 'package:fwitgi_app/features/body_tracking/presentation/bloc/body_tracking_state.dart'; // For BodyTrackingState
+import 'package:fwitgi_app/features/body_tracking/presentation/bloc/body_tracking_event.dart'; // Added missing import
 
-class DashboardPage extends StatelessWidget {
+class DashboardPage extends StatefulWidget {
   const DashboardPage({Key? key}) : super(key: key);
 
+  @override
+  State<DashboardPage> createState() => _DashboardPageState();
+}
+
+class _DashboardPageState extends State<DashboardPage> {
   // Helper getters to access theme colors using BuildContext
   Color _getOnSurfaceColor(BuildContext context) => Theme.of(context).colorScheme.onSurface;
   Color _getOnSurfaceVariantColor(BuildContext context) => Theme.of(context).colorScheme.onSurfaceVariant;
@@ -14,46 +36,161 @@ class DashboardPage extends StatelessWidget {
   Color _getNavigationBarBackgroundColor(BuildContext context) => Theme.of(context).navigationBarTheme.backgroundColor ?? Theme.of(context).cardColor;
   Color _getOnBackgroundColor(BuildContext context) => Theme.of(context).colorScheme.onBackground;
 
+  late AuthBloc _authBloc;
+  late WorkoutBloc _workoutBloc;
+  late NutritionBloc _nutritionBloc;
+  late BodyTrackingBloc _bodyTrackingBloc;
+
+  @override
+  void initState() {
+    super.initState();
+    // Corrected: Changed 'getlt' to 'getIt' for dependency injection
+    _authBloc = getIt<AuthBloc>();
+    _workoutBloc = getIt<WorkoutBloc>();
+    _nutritionBloc = getIt<NutritionBloc>();
+    _bodyTrackingBloc = getIt<BodyTrackingBloc>();
+
+    // Use addPostFrameCallback to ensure context is fully available
+    // before accessing Bloc state and dispatching events.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final authState = _authBloc.state; // Get the current state of AuthBloc
+      print('DashboardPage initState: Auth state is $authState when post-frame callback runs.');
+      if (authState is AuthAuthenticated) {
+        final String userId = authState.user.id;
+        print('DashboardPage initState: AuthAuthenticated. Dispatching initial data loads for user: $userId');
+        
+        // Dispatch all necessary data loading events here
+        _workoutBloc.add(LoadWorkouts(userId));
+        _nutritionBloc.add(LoadDailyNutritionEvent(userId: userId, date: DateTime.now()));
+        _bodyTrackingBloc.add(LoadBodyStatsEvent(userId));
+        _workoutBloc.add(LoadWorkoutTemplates(userId)); // Always dispatch templates
+      } else {
+        print('DashboardPage initState: Auth state is NOT authenticated ($authState). Data loads not dispatched.');
+        // This case should ideally not be reached if AuthWrapper works correctly.
+        // You might want to navigate to LoginPage here if the user somehow reaches Dashboard unauthenticated.
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
+    const int currentIndex = 0; // Home is selected
+
     return Scaffold(
+      // Removed the top-level BlocConsumer<AuthBloc, AuthState> here.
+      // AuthWrapper handles showing loading/login pages based on AuthBloc.
+      // DashboardPage assumes authentication.
       body: CustomScrollView(
         slivers: [
-          _buildAppBar(context),
+          // Use BlocBuilder for AppBar title to react to user name changes
+          BlocBuilder<AuthBloc, AuthState>(
+            bloc: _authBloc,
+            builder: (context, authState) {
+              UserModel? currentUser;
+              if (authState is AuthAuthenticated) {
+                currentUser = authState.user;
+              }
+              // If currentUser is null, it means AuthBloc is not yet in AuthAuthenticated.
+              // This is a fallback; ideally, AuthWrapper prevents this state.
+              return _buildAppBar(context, currentUser);
+            },
+          ),
           SliverPadding(
             padding: const EdgeInsets.all(16),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate([
-                _buildStatsGrid(context),
-                const SizedBox(height: 24),
-                _buildQuickActions(context),
-                const SizedBox(height: 24),
-                _buildRecentWorkouts(context),
-                const SizedBox(height: 24),
-                _buildProgressChart(context),
-                // REMOVED: Temporary "Go to Workout Session (Test)" button
-                const SizedBox(height: 100), // Original bottom padding
-              ]),
+            sliver: BlocBuilder<WorkoutBloc, WorkoutState>(
+              bloc: _workoutBloc,
+              builder: (context, workoutState) {
+                // Watch other blocs for their states too, as content depends on all
+                final nutritionState = context.watch<NutritionBloc>().state;
+                final bodyTrackingState = context.watch<BodyTrackingBloc>().state;
+
+                print('DashboardPage: WorkoutBloc builder - workoutState: $workoutState, nutritionState: $nutritionState, bodyTrackingState: $bodyTrackingState');
+
+                if (workoutState is WorkoutLoading || nutritionState is NutritionLoading || bodyTrackingState is BodyTrackingLoading) {
+                  print('DashboardPage: Displaying data loading indicator for workout/nutrition/bodytracking.');
+                  return const SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(20.0),
+                          child: CircularProgressIndicator(),
+                        )),
+                  );
+                } else if (workoutState is WorkoutError) {
+                  print('DashboardPage: Displaying workout error: ${workoutState.message}');
+                  return SliverToBoxAdapter(
+                      child: Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(20.0),
+                            child: Text('Error loading workouts: ${workoutState.message}'),
+                          )));
+                } else if (nutritionState is NutritionError) {
+                  print('DashboardPage: Displaying nutrition error: ${nutritionState.message}');
+                  return SliverToBoxAdapter(
+                      child: Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(20.0),
+                            child: Text('Error loading nutrition: ${nutritionState.message}'),
+                          )));
+                } else if (bodyTrackingState is BodyTrackingError) {
+                  print('DashboardPage: Displaying body tracking error: ${bodyTrackingState.message}');
+                  return SliverToBoxAdapter(
+                      child: Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(20.0),
+                            child: Text('Error loading body stats: ${bodyTrackingState.message}'),
+                          )));
+                }
+                
+                // If we reach here, all data blocs should be in a loaded state (or initial if no data)
+                // Get currentUser safely, as DashboardPage should only be reached if authenticated.
+                final currentUser = (context.read<AuthBloc>().state as AuthAuthenticated).user;
+                print('DashboardPage: All data loaded. Building dashboard content.');
+
+                final List<Workout> recentWorkouts = (workoutState is WorkoutLoaded) ? workoutState.workouts.take(2).toList() : [];
+                final int workoutsToday = (workoutState is WorkoutLoaded) ? workoutState.workouts.where((w) {
+                  final now = DateTime.now();
+                  final workoutDate = DateTime(w.startTime.year, w.startTime.month, w.startTime.day);
+                  final todayDate = DateTime(now.year, now.month, now.day);
+                  return workoutDate.isAtSameMomentAs(todayDate);
+                }).length : 0;
+                
+                final Map<String, double> weeklyWorkoutSummary = (workoutState is WorkoutLoaded) ? workoutState.workoutSummary : {};
+
+                return SliverList(
+                  delegate: SliverChildListDelegate([
+                    _buildStatsGrid(context, workoutsToday, currentUser),
+                    const SizedBox(height: 24),
+                    _buildQuickActions(context),
+                    const SizedBox(height: 24),
+                    _buildRecentWorkouts(context, recentWorkouts),
+                    const SizedBox(height: 24),
+                    _buildProgressChart(context, weeklyWorkoutSummary, currentUser),
+                    const SizedBox(height: 100),
+                  ]),
+                );
+              },
             ),
           ),
         ],
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      floatingActionButton: _buildFAB(context), // FAB logic moved to this method
-      bottomNavigationBar: _buildBottomNavBar(context),
+      floatingActionButton: _buildFAB(context),
+      bottomNavigationBar: _buildBottomNavBar(context, currentIndex),
     );
   }
 
-  Widget _buildAppBar(BuildContext context) {
+  Widget _buildAppBar(BuildContext context, UserModel? currentUser) {
+    String greetingName = currentUser?.name.split(' ').first ?? 'User'; // Handle null currentUser gracefully
+
     return SliverAppBar(
       expandedHeight: 180,
       floating: true,
       pinned: true,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       flexibleSpace: FlexibleSpaceBar(
-        background: Container( // Gradient AppBar Background
-          decoration: BoxDecoration(
+        background: Container(
+          decoration: const BoxDecoration(
             gradient: AppTheme.primaryGradient,
           ),
         ),
@@ -62,7 +199,7 @@ class DashboardPage extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Good morning, Alex',
+              'Good morning, $greetingName',
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: Colors.white,
@@ -81,17 +218,31 @@ class DashboardPage extends StatelessWidget {
       actions: [
         IconButton(
           icon: const Icon(Icons.notifications_outlined, color: Colors.white),
-          onPressed: () {},
+          onPressed: () {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Notifications not implemented yet.')),
+            );
+          },
         ),
         IconButton(
           icon: const Icon(Icons.person_outline, color: Colors.white),
-          onPressed: () {},
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const UserProfilePage()),
+            );
+          },
         ),
       ],
     );
   }
 
-  Widget _buildStatsGrid(BuildContext context) {
+  Widget _buildStatsGrid(BuildContext context, int workoutsToday, UserModel currentUser) {
+    double dailyCalories = (context.watch<NutritionBloc>().state is NutritionLoaded)
+        ? (context.watch<NutritionBloc>().state as NutritionLoaded).dailySummary['calories'] ?? 0
+        : 0;
+    int dailyCalorieGoal = currentUser.preferences.dailyCalorieGoal;
+
     return Container(
       decoration: BoxDecoration(
         gradient: AppTheme.primaryGradient,
@@ -114,8 +265,8 @@ class DashboardPage extends StatelessWidget {
               Expanded(
                 child: _buildStatCard(
                   'Workouts',
-                  '2',
-                  '/ 3 planned',
+                  '$workoutsToday',
+                  '/ ? planned',
                   Icons.fitness_center,
                   Colors.white,
                 ),
@@ -124,8 +275,8 @@ class DashboardPage extends StatelessWidget {
               Expanded(
                 child: _buildStatCard(
                   'Calories',
-                  '1,850',
-                  '/ 2,200 goal',
+                  '${dailyCalories.toStringAsFixed(0)}',
+                  '/ $dailyCalorieGoal goal',
                   Icons.local_fire_department,
                   Colors.white,
                 ),
@@ -208,7 +359,6 @@ class DashboardPage extends StatelessWidget {
                 Icons.play_arrow,
                 AppTheme.primaryColor,
                 () {
-                  // Navigate to the new WorkoutSelectionPage
                   Navigator.push(
                     context,
                     MaterialPageRoute(builder: (context) => const WorkoutSelectionPage()),
@@ -224,7 +374,10 @@ class DashboardPage extends StatelessWidget {
                 Icons.restaurant,
                 AppTheme.accentColor,
                 () {
-                  // TODO: Implement navigation to log meal page
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const NutritionPage()),
+                  );
                 },
               ),
             ),
@@ -236,7 +389,10 @@ class DashboardPage extends StatelessWidget {
                 Icons.monitor_weight,
                 AppTheme.secondaryColor,
                 () {
-                  // TODO: Implement navigation to body stats page
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const BodyTrackingPage()),
+                  );
                 },
               ),
             ),
@@ -285,7 +441,7 @@ class DashboardPage extends StatelessWidget {
     );
   }
 
-  Widget _buildRecentWorkouts(BuildContext context) {
+  Widget _buildRecentWorkouts(BuildContext context, List<Workout> recentWorkouts) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -300,34 +456,42 @@ class DashboardPage extends StatelessWidget {
             ),
             TextButton(
               onPressed: () {
-                // TODO: Implement navigation to view all workouts
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const WorkoutHistoryPage()),
+                );
               },
               child: const Text('View All'),
             ),
           ],
         ),
         const SizedBox(height: 16),
-        _buildWorkoutCard(
-          context,
-          'Push Day',
-          'Chest, Shoulders, Triceps',
-          '1h 15m',
-          '12.5k lbs',
-          Icons.fitness_center,
-          AppTheme.primaryColor,
-          true,
-        ),
-        const SizedBox(height: 12),
-        _buildWorkoutCard(
-          context,
-          'Pull Day',
-          'Back, Biceps',
-          '1h 5m',
-          '10.2k lbs',
-          Icons.fitness_center,
-          AppTheme.accentColor,
-          false,
-        ),
+        if (recentWorkouts.isEmpty)
+          Center(
+            child: Text(
+              'No recent workouts. Start a new one!',
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+            ),
+          )
+        else
+          Column(
+            children: recentWorkouts.map((workout) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12.0),
+                child: _buildWorkoutCard(
+                  context,
+                  workout.name,
+                  // Dynamically generate subtitle based on exercises
+                  workout.exercises.map((e) => e.name).take(2).join(', ') + (workout.exercises.length > 2 ? '...' : ''), 
+                  '${workout.duration.inMinutes}m',
+                  '${(workout.totalWeight).toStringAsFixed(1)} kg', // Keep kg if units are metric
+                  Icons.fitness_center,
+                  Theme.of(context).colorScheme.primary, // Using theme primary color
+                  workout.endTime != null, // Assuming workout is completed if endTime is set
+                ),
+              );
+            }).toList(),
+          ),
       ],
     );
   }
@@ -393,8 +557,8 @@ class DashboardPage extends StatelessWidget {
                 Text(
                   subtitle,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: _getOnSurfaceVariantColor(context),
-                  ),
+                        color: _getOnSurfaceVariantColor(context),
+                      ),
                 ),
               ],
             ),
@@ -409,9 +573,9 @@ class DashboardPage extends StatelessWidget {
                   Text(
                     duration,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: _getOnSurfaceVariantColor(context),
-                      fontWeight: FontWeight.w500,
-                    ),
+                          color: _getOnSurfaceVariantColor(context),
+                          fontWeight: FontWeight.w500,
+                        ),
                   ),
                 ],
               ),
@@ -423,9 +587,9 @@ class DashboardPage extends StatelessWidget {
                   Text(
                     weight,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: _getOnSurfaceVariantColor(context),
-                      fontWeight: FontWeight.w500,
-                    ),
+                          color: _getOnSurfaceVariantColor(context),
+                          fontWeight: FontWeight.w500,
+                        ),
                   ),
                 ],
               ),
@@ -436,11 +600,54 @@ class DashboardPage extends StatelessWidget {
     );
   }
 
-  Widget _buildProgressChart(BuildContext context) {
+  Widget _buildProgressChart(BuildContext context, Map<String, double> weeklyWorkoutSummary, UserModel currentUser) {
+    final Map<String, double> workoutSummary = weeklyWorkoutSummary;
+
+    final List<BarChartGroupData> barGroups = [];
+    final now = DateTime.now();
+    final DateFormat formatter = DateFormat('yyyy-MM-dd');
+    final List<String> xAxisLabels = [];
+
+    for (int i = 6; i >= 0; i--) {
+      final date = DateTime(now.year, now.month, now.day).subtract(Duration(days: i));
+      final String formattedDate = formatter.format(date);
+      final double totalWeight = workoutSummary[formattedDate] ?? 0.0;
+      final int dayIndex = 6 - i;
+
+      barGroups.add(
+        BarChartGroupData(
+          x: dayIndex,
+          barRods: [
+            BarChartRodData(
+              toY: totalWeight,
+              color: Theme.of(context).colorScheme.primary,
+              width: 8,
+              borderRadius: BorderRadius.circular(4),
+              backDrawRodData: BackgroundBarChartRodData(
+                show: true,
+                toY: (currentUser.stats.totalWeightLifted > 0 ? currentUser.stats.totalWeightLifted / 7 : 100.0), // Use average or a reasonable base for background bar
+                color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+              ),
+            ),
+          ],
+        ),
+      );
+      xAxisLabels.add(DateFormat('E').format(date));
+    }
+
+    double maxY = 0;
+    if (workoutSummary.isNotEmpty) {
+      maxY = workoutSummary.values.reduce((a, b) => a > b ? a : b) * 1.5;
+      if (maxY < 100) maxY = 100;
+    } else {
+      maxY = 100; // Default max Y if no data
+    }
+    if (maxY < 200) maxY = 200; // Ensure a minimum scale for the chart
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: _getCardColor(context),
+        color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -456,11 +663,15 @@ class DashboardPage extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Weekly Progress',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+              Expanded(
+                child: Text(
+                  'Weekly Progress (Total Weight Lifted)',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
               Container(
                 padding:
@@ -479,7 +690,7 @@ class DashboardPage extends StatelessWidget {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      '+12%',
+                      '+12%', // This would typically be dynamic from BLoC, based on actual progress
                       style: TextStyle(
                         color: AppTheme.accentColor,
                         fontWeight: FontWeight.bold,
@@ -494,27 +705,96 @@ class DashboardPage extends StatelessWidget {
           const SizedBox(height: 16),
           SizedBox(
             height: 200,
-            child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    AppTheme.primaryColor.withOpacity(0.1),
-                    AppTheme.accentColor.withOpacity(0.1),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Center(
-                child: Text(
-                  'Chart Placeholder\n(FL Chart Integration)',
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: _getOnBackgroundColor(context).withOpacity(0.6),
+            child: (workoutSummary.isEmpty || barGroups.isEmpty)
+                ? Center(
+                    child: Text(
+                      'No workout data for this week yet.',
+                      style: TextStyle(color: Theme.of(context).colorScheme.onBackground.withOpacity(0.6)),
+                    ),
+                  )
+                : BarChart(
+                    BarChartData(
+                      maxY: maxY,
+                      barGroups: barGroups,
+                      borderData: FlBorderData(
+                        show: false,
+                      ),
+                      titlesData: FlTitlesData(
+                        show: true,
+                        bottomTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            getTitlesWidget: (value, meta) {
+                              return SideTitleWidget(
+                                axisSide: meta.axisSide,
+                                space: 4,
+                                child: Text(xAxisLabels[value.toInt()], style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 10)),
+                              );
+                            },
+                          ),
+                        ),
+                        leftTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            getTitlesWidget: (value, meta) {
+                              if (value == 0) return const Text('');
+                              return Text(value.toInt().toString(), style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 10));
+                            },
+                            interval: maxY / 4, // Adjust interval based on max Y
+                            reservedSize: 25,
+                          ),
+                        ),
+                        topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                      ),
+                      gridData: FlGridData(
+                        show: true,
+                        drawVerticalLine: false,
+                        getDrawingHorizontalLine: (value) {
+                          return FlLine(
+                            color: Colors.grey.withOpacity(0.2),
+                            strokeWidth: 0.5,
+                          );
+                        },
+                      ),
+                      barTouchData: BarTouchData(
+                        touchTooltipData: BarTouchTooltipData(
+                          // Fixed: tooltipBgColor changed to getTooltipColor in newer fl_chart versions
+                          getTooltipColor: (group) => Colors.blueGrey,
+                          tooltipRoundedRadius: 8,
+                          getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                            String weekDay = xAxisLabels[group.x.toInt()];
+                            return BarTooltipItem(
+                              '$weekDay\n',
+                              const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                              children: <TextSpan>[
+                                TextSpan(
+                                  text: rod.toY.toStringAsFixed(1),
+                                  style: const TextStyle(
+                                    color: Colors.yellow,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const TextSpan(
+                                  text: ' kg',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-              ),
-            ),
           ),
         ],
       ),
@@ -522,6 +802,14 @@ class DashboardPage extends StatelessWidget {
   }
 
   Widget _buildFAB(BuildContext context) {
+    final authState = context.read<AuthBloc>().state;
+    String? currentUserId;
+    if (authState is AuthAuthenticated) {
+      currentUserId = authState.user.id;
+    } else {
+      currentUserId = null;
+    }
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 24.0),
       child: Container(
@@ -530,18 +818,18 @@ class DashboardPage extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: AppTheme.primaryColor.withOpacity(0.3),
-              blurRadius: 12,
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
               offset: const Offset(0, 4),
             ),
           ],
         ),
         child: FloatingActionButton.extended(
-          onPressed: () {
-            // CONNECTING FAB TO START NEW WORKOUT SESSION
+          onPressed: currentUserId == null ? null : () {
+            // Ensure userId is passed to WorkoutSessionPage
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => const WorkoutSessionPage()),
+              MaterialPageRoute(builder: (context) => WorkoutSessionPage(userId: currentUserId!)),
             );
           },
           backgroundColor: Colors.transparent,
@@ -559,13 +847,10 @@ class DashboardPage extends StatelessWidget {
     );
   }
 
-  Widget _buildBottomNavBar(BuildContext context) {
-    // Current selected index - for demonstration, you'd manage this with state
-    const int currentIndex = 0; // Home is selected
-
+  Widget _buildBottomNavBar(BuildContext context, int currentIndex) {
     return Container(
       decoration: BoxDecoration(
-        color: _getNavigationBarBackgroundColor(context),
+        color: Theme.of(context).navigationBarTheme.backgroundColor ?? Theme.of(context).cardColor,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.1),
@@ -581,19 +866,37 @@ class DashboardPage extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               _buildNavItem(context, Icons.home, 'Home', 0, currentIndex, () {
-                // TODO: Implement navigation to Home page
+                // Assuming Home is the DashboardPage itself or a higher-level navigation
+                // For simplicity, navigating to DashboardPage (which will rebuild itself)
+                // In a real app, this might just update an index for a PageView
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (context) => const DashboardPage()),
+                  );
               }),
               _buildNavItem(context, Icons.fitness_center, 'Workouts', 1, currentIndex, () {
-                // TODO: Implement navigation to Workouts list page
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => const WorkoutHistoryPage()),
+                );
               }),
               _buildNavItem(context, Icons.restaurant, 'Nutrition', 2, currentIndex, () {
-                // TODO: Implement navigation to Nutrition page
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => const NutritionPage()),
+                );
               }),
               _buildNavItem(context, Icons.analytics, 'Progress', 3, currentIndex, () {
-                // TODO: Implement navigation to Progress page
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => const ProgressPage()),
+                );
               }),
               _buildNavItem(context, Icons.person, 'Profile', 4, currentIndex, () {
-                // TODO: Implement navigation to Profile page
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => const UserProfilePage()),
+                );
               }),
             ],
           ),
@@ -610,7 +913,7 @@ class DashboardPage extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
         decoration: BoxDecoration(
           color: isSelected
               ? AppTheme.primaryColor.withOpacity(0.1)
@@ -622,21 +925,79 @@ class DashboardPage extends StatelessWidget {
           children: [
             Icon(
               icon,
-              color: isSelected ? AppTheme.primaryColor : _getOnSurfaceVariantColor(context),
+              color: isSelected ? AppTheme.primaryColor : Theme.of(context).colorScheme.onSurfaceVariant,
               size: 24,
             ),
             const SizedBox(height: 4),
             Text(
               label,
               style: TextStyle(
-                color: isSelected ? AppTheme.primaryColor : _getOnSurfaceVariantColor(context),
-                fontSize: 12,
+                color: isSelected ? AppTheme.primaryColor : Theme.of(context).colorScheme.onSurfaceVariant,
+                fontSize: 11,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
               ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+// Placeholder pages (You should move these to their dedicated files in their respective feature folders)
+class NutritionPage extends StatelessWidget {
+  const NutritionPage({Key? key}) : super(key: key);
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Nutrition Page')),
+      body: const Center(child: Text('This is the Nutrition Page. (Placeholder)')),
+    );
+  }
+}
+
+class BodyTrackingPage extends StatelessWidget {
+  const BodyTrackingPage({Key? key}) : super(key: key); // Corrected super call
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Body Tracking Page')),
+      body: const Center(child: Text('This is the Body Tracking Page. (Placeholder)')),
+    );
+  }
+}
+
+class WorkoutHistoryPage extends StatelessWidget {
+  const WorkoutHistoryPage({Key? key}) : super(key: key); // Corrected super call
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Workout History Page')),
+      body: const Center(child: Text('This is the Workout History Page. (Placeholder)')),
+    );
+  }
+}
+
+class ProgressPage extends StatelessWidget {
+  const ProgressPage({Key? key}) : super(key: key); // Corrected super call
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Progress Page')),
+      body: const Center(child: Text('This is the Progress Page. (Placeholder)')),
+    );
+  }
+}
+
+class UserProfilePage extends StatelessWidget {
+  const UserProfilePage({Key? key}) : super(key: key); // Corrected super call
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('User Profile Page')),
+      body: const Center(child: Text('This is the User Profile Page. (Placeholder)')),
     );
   }
 }

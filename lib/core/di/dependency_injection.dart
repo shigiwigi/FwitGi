@@ -1,5 +1,7 @@
 import 'package:get_it/get_it.dart'; // Should now work after adding to pubspec.yaml
 
+import '../../core/theme/theme_cubit.dart'; // Add this import for ThemeCubit
+
 import '../../features/auth/data/repositories/auth_repository_impl.dart';
 import '../../features/auth/domain/repositories/auth_repository.dart';
 import '../../features/auth/domain/usecases/get_user_usecase.dart';
@@ -9,7 +11,7 @@ import '../../features/auth/domain/usecases/sign_up_usecase.dart';
 import '../../features/auth/presentation/bloc/auth_bloc.dart';
 
 // Ensure these paths are correct relative to dependency_injection.dart
-import '../../features/user/data/repositories/user_repository_impl.dart';
+import '../../features/auth/data/repositories/user_repository_impl.dart';
 import '../../features/user/domain/repositories/user_repository.dart';
 import '../../features/workout/data/repositories/workout_repository_impl.dart';
 import '../../features/workout/domain/repositories/workout_repository.dart';
@@ -50,5 +52,6 @@ class DependencyInjection {
     getlt.registerFactory(() => WorkoutBloc(getlt()));
     getlt.registerFactory(() => NutritionBloc(getlt()));
     getlt.registerFactory(() => BodyTrackingBloc(getlt()));
+    getlt.registerSingleton<ThemeCubit>(ThemeCubit());
   }
 }

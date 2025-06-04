@@ -2,6 +2,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 
 import '../../domain/repositories/nutrition_repository.dart';
+import 'package:fwitgi_app/features/nutrition/presentation/bloc/nutrition_state.dart'; // Import the new state file
 
 // Nutrition Events
 abstract class NutritionEvent extends Equatable {
@@ -26,28 +27,13 @@ class LoadDailyNutritionEvent extends NutritionEvent {
   List<Object> get props => [userId, date];
 }
 
-// Nutrition States
-abstract class NutritionState extends Equatable {
-  const NutritionState();
-  @override
-  List<Object> get props => [];
-}
+// REMOVED: Nutrition States definitions are now in nutrition_state.dart
+// abstract class NutritionState extends Equatable { ... }
+// class NutritionInitial extends NutritionState { ... }
+// class NutritionLoading extends NutritionState { ... }
+// class NutritionLoaded extends NutritionState { ... }
+// class NutritionError extends NutritionState { ... }
 
-class NutritionInitial extends NutritionState {}
-class NutritionLoading extends NutritionState {}
-class NutritionLoaded extends NutritionState {
-  final Map<String, double> dailySummary;
-  final List<Map<String, dynamic>> meals;
-  const NutritionLoaded({required this.dailySummary, required this.meals});
-  @override
-  List<Object> get props => [dailySummary, meals];
-}
-class NutritionError extends NutritionState {
-  final String message;
-  const NutritionError(this.message);
-  @override
-  List<Object> get props => [message];
-}
 
 /// BLoC for managing nutrition-related states and events.
 class NutritionBloc extends Bloc<NutritionEvent, NutritionState> {
