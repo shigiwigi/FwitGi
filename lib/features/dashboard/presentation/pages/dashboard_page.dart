@@ -1,3 +1,5 @@
+// lib/features/dashboard/presentation/pages/dashboard_page.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fl_chart/fl_chart.dart'; // For the bar chart
@@ -21,6 +23,13 @@ import 'package:fwitgi_app/features/body_tracking/presentation/bloc/body_trackin
 import 'package:fwitgi_app/features/body_tracking/presentation/bloc/body_tracking_state.dart'; // For BodyTrackingState
 import 'package:fwitgi_app/features/body_tracking/presentation/bloc/body_tracking_event.dart'; // Added missing import
 
+// Corrected imports for actual page files
+import 'package:fwitgi_app/features/nutrition/presentation/pages/nutrition_page.dart'; // Corrected import
+import 'package:fwitgi_app/features/body_tracking/presentation/pages/body_tracking_page.dart'; // Corrected import
+import 'package:fwitgi_app/features/workout/presentation/pages/workout_history_page.dart'; // Corrected import
+import 'package:fwitgi_app/features/user/presentation/pages/user_profile_page.dart'; // Corrected import
+
+
 class DashboardPage extends StatefulWidget {
   const DashboardPage({Key? key}) : super(key: key);
 
@@ -32,8 +41,10 @@ class _DashboardPageState extends State<DashboardPage> {
   // Helper getters to access theme colors using BuildContext
   Color _getOnSurfaceColor(BuildContext context) => Theme.of(context).colorScheme.onSurface;
   Color _getOnSurfaceVariantColor(BuildContext context) => Theme.of(context).colorScheme.onSurfaceVariant;
-  Color _getCardColor(BuildContext context) => Theme.of(context).cardColor;
-  Color _getNavigationBarBackgroundColor(BuildContext context) => Theme.of(context).navigationBarTheme.backgroundColor ?? Theme.of(context).cardColor;
+  // FIX: Replaced deprecated Theme.of(context).cardColor with Theme.of(context).colorScheme.surfaceContainerHighest for Material 3 compatibility
+  Color _getCardColor(BuildContext context) => Theme.of(context).colorScheme.surfaceContainerHighest;
+  // FIX: Replaced deprecated Theme.of(context).cardColor with Theme.of(context).colorScheme.surfaceContainerHighest
+  Color _getNavigationBarBackgroundColor(BuildContext context) => Theme.of(context).navigationBarTheme.backgroundColor ?? Theme.of(context).colorScheme.surfaceContainerHighest;
   Color _getOnBackgroundColor(BuildContext context) => Theme.of(context).colorScheme.onBackground;
 
   late AuthBloc _authBloc;
@@ -44,11 +55,11 @@ class _DashboardPageState extends State<DashboardPage> {
   @override
   void initState() {
     super.initState();
-    // Corrected: Changed 'getlt' to 'getIt' for dependency injection
-    _authBloc = getIt<AuthBloc>();
-    _workoutBloc = getIt<WorkoutBloc>();
-    _nutritionBloc = getIt<NutritionBloc>();
-    _bodyTrackingBloc = getIt<BodyTrackingBloc>();
+    // FIX: Changed 'getIt' to 'getlt' to match the actual name in dependency_injection.dart
+    _authBloc = di.getlt<AuthBloc>();
+    _workoutBloc = di.getlt<WorkoutBloc>();
+    _nutritionBloc = di.getlt<NutritionBloc>();
+    _bodyTrackingBloc = di.getlt<BodyTrackingBloc>();
 
     // Use addPostFrameCallback to ensure context is fully available
     // before accessing Bloc state and dispatching events.
@@ -58,7 +69,7 @@ class _DashboardPageState extends State<DashboardPage> {
       if (authState is AuthAuthenticated) {
         final String userId = authState.user.id;
         print('DashboardPage initState: AuthAuthenticated. Dispatching initial data loads for user: $userId');
-        
+
         // Dispatch all necessary data loading events here
         _workoutBloc.add(LoadWorkouts(userId));
         _nutritionBloc.add(LoadDailyNutritionEvent(userId: userId, date: DateTime.now()));
@@ -141,7 +152,7 @@ class _DashboardPageState extends State<DashboardPage> {
                             child: Text('Error loading body stats: ${bodyTrackingState.message}'),
                           )));
                 }
-                
+
                 // If we reach here, all data blocs should be in a loaded state (or initial if no data)
                 // Get currentUser safely, as DashboardPage should only be reached if authenticated.
                 final currentUser = (context.read<AuthBloc>().state as AuthAuthenticated).user;
@@ -154,7 +165,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   final todayDate = DateTime(now.year, now.month, now.day);
                   return workoutDate.isAtSameMomentAs(todayDate);
                 }).length : 0;
-                
+
                 final Map<String, double> weeklyWorkoutSummary = (workoutState is WorkoutLoaded) ? workoutState.workoutSummary : {};
 
                 return SliverList(
@@ -482,7 +493,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   context,
                   workout.name,
                   // Dynamically generate subtitle based on exercises
-                  workout.exercises.map((e) => e.name).take(2).join(', ') + (workout.exercises.length > 2 ? '...' : ''), 
+                  workout.exercises.map((e) => e.name).take(2).join(', ') + (workout.exercises.length > 2 ? '...' : ''),
                   '${workout.duration.inMinutes}m',
                   '${(workout.totalWeight).toStringAsFixed(1)} kg', // Keep kg if units are metric
                   Icons.fitness_center,
@@ -850,7 +861,7 @@ class _DashboardPageState extends State<DashboardPage> {
   Widget _buildBottomNavBar(BuildContext context, int currentIndex) {
     return Container(
       decoration: BoxDecoration(
-        color: Theme.of(context).navigationBarTheme.backgroundColor ?? Theme.of(context).cardColor,
+        color: _getNavigationBarBackgroundColor(context), // Uses updated helper
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.1),
@@ -946,58 +957,4 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 }
 
-// Placeholder pages (You should move these to their dedicated files in their respective feature folders)
-class NutritionPage extends StatelessWidget {
-  const NutritionPage({Key? key}) : super(key: key);
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Nutrition Page')),
-      body: const Center(child: Text('This is the Nutrition Page. (Placeholder)')),
-    );
-  }
-}
-
-class BodyTrackingPage extends StatelessWidget {
-  const BodyTrackingPage({Key? key}) : super(key: key); // Corrected super call
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Body Tracking Page')),
-      body: const Center(child: Text('This is the Body Tracking Page. (Placeholder)')),
-    );
-  }
-}
-
-class WorkoutHistoryPage extends StatelessWidget {
-  const WorkoutHistoryPage({Key? key}) : super(key: key); // Corrected super call
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Workout History Page')),
-      body: const Center(child: Text('This is the Workout History Page. (Placeholder)')),
-    );
-  }
-}
-
-class ProgressPage extends StatelessWidget {
-  const ProgressPage({Key? key}) : super(key: key); // Corrected super call
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Progress Page')),
-      body: const Center(child: Text('This is the Progress Page. (Placeholder)')),
-    );
-  }
-}
-
-class UserProfilePage extends StatelessWidget {
-  const UserProfilePage({Key? key}) : super(key: key); // Corrected super call
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('User Profile Page')),
-      body: const Center(child: Text('This is the User Profile Page. (Placeholder)')),
-    );
-  }
-}
+// Removed duplicate placeholder page definitions. These pages are now imported from their respective feature folders.
