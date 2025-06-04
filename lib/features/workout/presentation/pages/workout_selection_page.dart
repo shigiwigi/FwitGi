@@ -9,8 +9,6 @@ import 'package:fwitgi_app/features/workout/domain/entities/workout.dart';
 import 'package:fwitgi_app/features/workout/presentation/pages/workout_session_page.dart';
 import 'package:fwitgi_app/features/auth/presentation/bloc/auth_bloc.dart';
 import 'package:fwitgi_app/features/auth/presentation/bloc/auth_state.dart';
-import 'package:fwitgi_app/features/workout/presentation/bloc/workout_event.dart'; // <-- ADD THIS IMPORT
-import 'package:fwitgi_app/features/workout/presentation/bloc/workout_state.dart'; // <-- ADD THIS IMPORT
 
 class WorkoutSelectionPage extends StatefulWidget {
   const WorkoutSelectionPage({Key? key}) : super(key: key);
@@ -31,7 +29,8 @@ class _WorkoutSelectionPageState extends State<WorkoutSelectionPage> {
     final authState = context.read<AuthBloc>().state;
     if (authState is AuthAuthenticated) {
       _currentUserId = authState.user.id;
-      _workoutBloc.add(LoadWorkoutTemplates(_currentUserId!)); // LoadWorkoutTemplates should now be recognized
+      // Dispatch LoadWorkoutTemplates event correctly to the bloc
+      _workoutBloc.add(LoadWorkoutTemplates(_currentUserId!));
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('User not authenticated. Cannot load templates.')),
@@ -45,14 +44,14 @@ class _WorkoutSelectionPageState extends State<WorkoutSelectionPage> {
       appBar: AppBar(
         title: const Text('Start New Workout'),
       ),
-      body: BlocBuilder<WorkoutBloc, WorkoutState>( // WorkoutState should now be recognized
+      body: BlocBuilder<WorkoutBloc, WorkoutState>(
         bloc: _workoutBloc,
         builder: (context, state) {
-          if (state is WorkoutLoading) { // WorkoutLoading should now be recognized
+          if (state is WorkoutLoading) {
             return const Center(child: CircularProgressIndicator());
-          } else if (state is WorkoutError) { // WorkoutError should now be recognized
+          } else if (state is WorkoutError) {
             return Center(child: Text('Error: ${state.message}'));
-          } else if (state is WorkoutLoaded) { // WorkoutLoaded should now be recognized
+          } else if (state is WorkoutLoaded) {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -64,7 +63,7 @@ class _WorkoutSelectionPageState extends State<WorkoutSelectionPage> {
                   ),
                 ),
                 Expanded(
-                  child: _buildWorkoutList(context, state.workoutTemplates, isTemplate: true),
+                  child: _buildWorkoutList(context, state.workoutTemplates, isTemplate: true), // Corrected access
                 ),
                 Padding(
                   padding: const EdgeInsets.all(16.0),
@@ -115,7 +114,7 @@ class _WorkoutSelectionPageState extends State<WorkoutSelectionPage> {
                         context,
                         MaterialPageRoute(
                           builder: (context) => WorkoutSessionPage(
-                            workoutTemplateId: workout.id,
+                            workoutTemplateId: workout.id, // Pass template ID
                             userId: _currentUserId!,
                           ),
                         ),

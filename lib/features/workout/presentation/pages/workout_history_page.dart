@@ -8,11 +8,7 @@ import 'package:fwitgi_app/features/auth/presentation/bloc/auth_bloc.dart'; // F
 import 'package:fwitgi_app/features/auth/presentation/bloc/auth_state.dart'; // For AuthState
 import 'package:fwitgi_app/features/workout/domain/entities/workout.dart'; // For Workout entity
 import 'package:fwitgi_app/features/workout/presentation/bloc/workout_bloc.dart'; // For WorkoutBloc
-// REMOVE: import 'package:fwitgi_app/features/workout/presentation/pages/workout_session_page.dart'; // To view workout details // Not used directly in this snippet for fixing errors
-
-// ADD THESE IMPORTS:
-import 'package:fwitgi_app/features/workout/presentation/bloc/workout_event.dart';
-import 'package:fwitgi_app/features/workout/presentation/bloc/workout_state.dart';
+import 'package:fwitgi_app/features/workout/presentation/pages/workout_session_page.dart'; // To view workout details
 
 class WorkoutHistoryPage extends StatefulWidget {
   const WorkoutHistoryPage({super.key});
@@ -33,7 +29,6 @@ class _WorkoutHistoryPageState extends State<WorkoutHistoryPage> {
     final authState = context.read<AuthBloc>().state;
     if (authState is AuthAuthenticated) {
       _currentUserId = authState.user.id;
-      // LoadWorkouts event should now be recognized
       _workoutBloc.add(LoadWorkouts(_currentUserId!));
     } else {
       _currentUserId = null;
@@ -53,11 +48,9 @@ class _WorkoutHistoryPageState extends State<WorkoutHistoryPage> {
       ),
       body: _currentUserId == null
           ? const Center(child: Text('Please log in to view your workout history.'))
-          // WorkoutState should now be recognized
           : BlocConsumer<WorkoutBloc, WorkoutState>(
               bloc: _workoutBloc,
               listener: (context, state) {
-                // WorkoutError should now be recognized
                 if (state is WorkoutError) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text('Error loading workouts: ${state.message}')),
@@ -65,14 +58,13 @@ class _WorkoutHistoryPageState extends State<WorkoutHistoryPage> {
                 }
               },
               builder: (context, state) {
-                // WorkoutLoading should now be recognized
                 if (state is WorkoutLoading) {
                   return const Center(child: CircularProgressIndicator());
-                  // WorkoutLoaded should now be recognized
                 } else if (state is WorkoutLoaded) {
                   if (state.workouts.isEmpty) {
                     return const Center(child: Text('No past workouts found. Start logging!'));
                   }
+                  // Sort workouts by startTime in descending order (most recent first)
                   state.workouts.sort((a, b) => b.startTime.compareTo(a.startTime));
 
                   return ListView.builder(
@@ -84,13 +76,16 @@ class _WorkoutHistoryPageState extends State<WorkoutHistoryPage> {
                         margin: const EdgeInsets.only(bottom: 12),
                         elevation: 2,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        child: InkWell(
+                        child: InkWell( // Use InkWell for tap effect
                           borderRadius: BorderRadius.circular(12),
                           onTap: () {
+                            // TODO: Navigate to a detailed view of the workout session
+                            // For now, we can navigate to WorkoutSessionPage in view-only mode
+                            // (WorkoutSessionPage might need modifications to support view-only)
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(content: Text('Tapped on "${workout.name}"')),
                             );
-                            // Example: Navigate to a detailed view
+                            // Example: Navigate to a detailed view (you might need a separate page or modify WorkoutSessionPage)
                             /*
                             Navigator.push(context, MaterialPageRoute(builder: (context) => WorkoutDetailView(workout: workout)));
                             */
@@ -130,7 +125,7 @@ class _WorkoutHistoryPageState extends State<WorkoutHistoryPage> {
                     },
                   );
                 }
-                return const SizedBox.shrink();
+                return const SizedBox.shrink(); // Fallback for other states
               },
             ),
     );
