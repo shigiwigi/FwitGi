@@ -3,40 +3,42 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fl_chart/fl_chart.dart'; // For the bar chart
 import 'package:intl/intl.dart'; // For date formatting
 
-import '../../../../core/theme/app_theme.dart';
+// Core and Theme
+import 'package:fwitgi_app/core/theme/app_theme.dart';
+import 'package:fwitgi_app/core/di/dependency_injection.dart';
+import 'package:fwitgi_app/core/models/user_model.dart';
+
+// Auth Feature
+import 'package:fwitgi_app/features/auth/presentation/bloc/auth_bloc.dart';
+import 'package:fwitgi_app/features/auth/presentation/bloc/auth_state.dart';
+
+// Workout Feature
+import 'package:fwitgi_app/features/workout/presentation/bloc/workout_bloc.dart';
+import 'package:fwitgi_app/features/workout/domain/entities/workout.dart';
+import 'package:fwitgi_app/features/workout/presentation/bloc/workout_event.dart';
+import 'package:fwitgi_app/features/workout/presentation/bloc/workout_state.dart';
 import 'package:fwitgi_app/features/workout/presentation/pages/workout_selection_page.dart';
 import 'package:fwitgi_app/features/workout/presentation/pages/workout_session_page.dart';
-import 'package:fwitgi_app/core/di/dependency_injection.dart'; // Changed: Removed 'as di'
-import 'package:fwitgi_app/core/models/user_model.dart'; // For UserModel
-import 'package:fwitgi_app/features/auth/presentation/bloc/auth_bloc.dart'; // For AuthBloc
-import 'package:fwitgi_app/features/auth/presentation/bloc/auth_state.dart'; // For AuthState
-
-// Explicitly import Workout Bloc and its types
-import 'package:fwitgi_app/features/workout/presentation/bloc/workout_bloc.dart'; // For WorkoutBloc
-import 'package:fwitgi_app/features/workout/domain/entities/workout.dart'; // For Workout entity
-import 'package:fwitgi_app/features/workout/presentation/bloc/workout_event.dart'; // For WorkoutEvent (LoadWorkouts, LoadWorkoutTemplates)
-import 'package:fwitgi_app/features/workout/presentation/bloc/workout_state.dart'; // For WorkoutState (WorkoutLoading, WorkoutLoaded, WorkoutError)
-
-
-// Explicitly import Nutrition Bloc and its types
-import 'package:fwitgi_app/features/nutrition/presentation/bloc/nutrition_bloc.dart'; // For NutritionBloc
-import 'package:fwitgi_app/features/nutrition/presentation/bloc/nutrition_event.dart'; // For NutritionEvent (LoadDailyNutritionEvent)
-import 'package:fwitgi_app/features/nutrition/presentation/bloc/nutrition_state.dart'; // For NutritionState (NutritionLoaded, NutritionLoading, NutritionError)
-
-// Explicitly import Body Tracking Bloc and its types
-import 'package:fwitgi_app/features/body_tracking/presentation/bloc/body_tracking_bloc.dart'; // For BodyTrackingBloc
-import 'package:fwitgi_app/features/body_tracking/presentation/bloc/body_tracking_event.dart'; // For BodyTrackingEvent (LoadBodyStatsEvent)
-import 'package:fwitgi_app/features/body_tracking/presentation/bloc/body_tracking_state.dart'; // For BodyTrackingState (BodyTrackingLoaded, BodyTrackingLoading, BodyTrackingError)
-
-// Corrected imports for actual page files
-import 'package:fwitgi_app/features/nutrition/presentation/pages/nutrition_page.dart';
-import 'package:fwitgi_app/features/body_tracking/presentation/pages/body_tracking_page.dart';
 import 'package:fwitgi_app/features/workout/presentation/pages/workout_history_page.dart';
+
+// Nutrition Feature
+import 'package:fwitgi_app/features/nutrition/presentation/bloc/nutrition_bloc.dart';
+import 'package:fwitgi_app/features/nutrition/presentation/bloc/nutrition_event.dart';
+import 'package:fwitgi_app/features/nutrition/presentation/bloc/nutrition_state.dart';
+import 'package:fwitgi_app/features/nutrition/presentation/pages/nutrition_page.dart';
+
+// Body Tracking Feature
+import 'package:fwitgi_app/features/body_tracking/presentation/bloc/body_tracking_bloc.dart';
+// Assuming body_tracking_event.dart is indeed under the nutrition feature path as discussed
+import 'package:fwitgi_app/features/nutrition/body_tracking/presentation/bloc/body_tracking_event.dart';
+import 'package:fwitgi_app/features/body_tracking/presentation/bloc/body_tracking_state.dart';
+import 'package:fwitgi_app/features/body_tracking/presentation/pages/body_tracking_page.dart';
+
+// User Feature
 import 'package:fwitgi_app/features/user/presentation/pages/user_profile_page.dart';
 
 // If you plan to create a ProgressPage, uncomment this line later.
 // import 'package:fwitgi_app/features/progress/presentation/pages/progress_page.dart';
-
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({Key? key}) : super(key: key);
@@ -49,9 +51,7 @@ class _DashboardPageState extends State<DashboardPage> {
   // Helper getters to access theme colors using BuildContext
   Color _getOnSurfaceColor(BuildContext context) => Theme.of(context).colorScheme.onSurface;
   Color _getOnSurfaceVariantColor(BuildContext context) => Theme.of(context).colorScheme.onSurfaceVariant;
-  // FIX: Replaced deprecated Theme.of(context).cardColor with Theme.of(context).colorScheme.surfaceContainerHighest for Material 3 compatibility
   Color _getCardColor(BuildContext context) => Theme.of(context).colorScheme.surfaceContainerHighest;
-  // FIX: Replaced deprecated Theme.of(context).cardColor with Theme.of(context).colorScheme.surfaceContainerHighest
   Color _getNavigationBarBackgroundColor(BuildContext context) => Theme.of(context).navigationBarTheme.backgroundColor ?? Theme.of(context).colorScheme.surfaceContainerHighest;
   Color _getOnBackgroundColor(BuildContext context) => Theme.of(context).colorScheme.onBackground;
 
@@ -63,30 +63,19 @@ class _DashboardPageState extends State<DashboardPage> {
   @override
   void initState() {
     super.initState();
-    // FIX: Changed 'getIt' to 'getlt' to match the actual name in dependency_injection.dart
     _authBloc = getlt<AuthBloc>();
     _workoutBloc = getlt<WorkoutBloc>();
     _nutritionBloc = getlt<NutritionBloc>();
     _bodyTrackingBloc = getlt<BodyTrackingBloc>();
 
-    // Use addPostFrameCallback to ensure context is fully available
-    // before accessing Bloc state and dispatching events.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final authState = _authBloc.state; // Get the current state of AuthBloc
-      print('DashboardPage initState: Auth state is $authState when post-frame callback runs.');
+      final authState = _authBloc.state;
       if (authState is AuthAuthenticated) {
         final String userId = authState.user.id;
-        print('DashboardPage initState: AuthAuthenticated. Dispatching initial data loads for user: $userId');
-
-        // Dispatch all necessary data loading events here
         _workoutBloc.add(LoadWorkouts(userId));
         _nutritionBloc.add(LoadDailyNutritionEvent(userId: userId, date: DateTime.now()));
-        _bodyTrackingBloc.add(LoadBodyStatsEvent(userId));
-        _workoutBloc.add(LoadWorkoutTemplates(userId)); // Always dispatch templates
-      } else {
-        print('DashboardPage initState: Auth state is NOT authenticated ($authState). Data loads not dispatched.');
-        // This case should ideally not be reached if AuthWrapper works correctly.
-        // You might want to navigate to LoginPage here if the user somehow reaches Dashboard unauthenticated.
+        _bodyTrackingBloc.add(LoadBodyStatsEvent(userId)); // Corrected Event for BodyTracking
+        _workoutBloc.add(LoadWorkoutTemplates(userId));
       }
     });
   }
@@ -96,12 +85,8 @@ class _DashboardPageState extends State<DashboardPage> {
     const int currentIndex = 0; // Home is selected
 
     return Scaffold(
-      // Removed the top-level BlocConsumer<AuthBloc, AuthState> here.
-      // AuthWrapper handles showing loading/login pages based on AuthBloc.
-      // DashboardPage assumes authentication.
       body: CustomScrollView(
         slivers: [
-          // Use BlocBuilder for AppBar title to react to user name changes
           BlocBuilder<AuthBloc, AuthState>(
             bloc: _authBloc,
             builder: (context, authState) {
@@ -109,8 +94,6 @@ class _DashboardPageState extends State<DashboardPage> {
               if (authState is AuthAuthenticated) {
                 currentUser = authState.user;
               }
-              // If currentUser is null, it means AuthBloc is not yet in AuthAuthenticated.
-              // This is a fallback; ideally, AuthWrapper prevents this state.
               return _buildAppBar(context, currentUser);
             },
           ),
@@ -119,14 +102,10 @@ class _DashboardPageState extends State<DashboardPage> {
             sliver: BlocBuilder<WorkoutBloc, WorkoutState>(
               bloc: _workoutBloc,
               builder: (context, workoutState) {
-                // Watch other blocs for their states too, as content depends on all
                 final nutritionState = context.watch<NutritionBloc>().state;
                 final bodyTrackingState = context.watch<BodyTrackingBloc>().state;
 
-                print('DashboardPage: WorkoutBloc builder - workoutState: $workoutState, nutritionState: $nutritionState, bodyTrackingState: $bodyTrackingState');
-
                 if (workoutState is WorkoutLoading || nutritionState is NutritionLoading || bodyTrackingState is BodyTrackingLoading) {
-                  print('DashboardPage: Displaying data loading indicator for workout/nutrition/bodytracking.');
                   return const SliverFillRemaining(
                     hasScrollBody: false,
                     child: Center(
@@ -136,7 +115,6 @@ class _DashboardPageState extends State<DashboardPage> {
                         )),
                   );
                 } else if (workoutState is WorkoutError) {
-                  print('DashboardPage: Displaying workout error: ${workoutState.message}');
                   return SliverToBoxAdapter(
                       child: Center(
                           child: Padding(
@@ -144,7 +122,6 @@ class _DashboardPageState extends State<DashboardPage> {
                             child: Text('Error loading workouts: ${workoutState.message}'),
                           )));
                 } else if (nutritionState is NutritionError) {
-                  print('DashboardPage: Displaying nutrition error: ${nutritionState.message}');
                   return SliverToBoxAdapter(
                       child: Center(
                           child: Padding(
@@ -152,7 +129,6 @@ class _DashboardPageState extends State<DashboardPage> {
                             child: Text('Error loading nutrition: ${nutritionState.message}'),
                           )));
                 } else if (bodyTrackingState is BodyTrackingError) {
-                  print('DashboardPage: Displaying body tracking error: ${bodyTrackingState.message}');
                   return SliverToBoxAdapter(
                       child: Center(
                           child: Padding(
@@ -161,10 +137,14 @@ class _DashboardPageState extends State<DashboardPage> {
                           )));
                 }
 
-                // If we reach here, all data blocs should be in a loaded state (or initial if no data)
-                // Get currentUser safely, as DashboardPage should only be reached if authenticated.
-                final currentUser = (context.read<AuthBloc>().state as AuthAuthenticated).user;
-                print('DashboardPage: All data loaded. Building dashboard content.');
+                final authBlocState = context.read<AuthBloc>().state;
+                if (authBlocState is! AuthAuthenticated) {
+                    // This should ideally be handled by AuthWrapper, but as a fallback:
+                    return const SliverFillRemaining(
+                        child: Center(child: Text("User not authenticated.")));
+                }
+                final currentUser = authBlocState.user;
+
 
                 final List<Workout> recentWorkouts = (workoutState is WorkoutLoaded) ? workoutState.workouts.take(2).toList() : [];
                 final int workoutsToday = (workoutState is WorkoutLoaded) ? workoutState.workouts.where((w) {
@@ -185,7 +165,7 @@ class _DashboardPageState extends State<DashboardPage> {
                     _buildRecentWorkouts(context, recentWorkouts),
                     const SizedBox(height: 24),
                     _buildProgressChart(context, weeklyWorkoutSummary, currentUser),
-                    const SizedBox(height: 100),
+                    const SizedBox(height: 100), // Added padding for FAB
                   ]),
                 );
               },
@@ -200,7 +180,7 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Widget _buildAppBar(BuildContext context, UserModel? currentUser) {
-    String greetingName = currentUser?.name.split(' ').first ?? 'User'; // Handle null currentUser gracefully
+    String greetingName = currentUser?.name.split(' ').first ?? 'User';
 
     return SliverAppBar(
       expandedHeight: 180,
@@ -257,9 +237,11 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Widget _buildStatsGrid(BuildContext context, int workoutsToday, UserModel currentUser) {
-    double dailyCalories = (context.watch<NutritionBloc>().state is NutritionLoaded)
-        ? (context.watch<NutritionBloc>().state as NutritionLoaded).dailySummary['calories'] ?? 0
-        : 0;
+    double dailyCalories = 0;
+    final nutritionState = context.watch<NutritionBloc>().state;
+    if (nutritionState is NutritionLoaded) {
+        dailyCalories = nutritionState.dailySummary['calories'] ?? 0;
+    }
     int dailyCalorieGoal = currentUser.preferences.dailyCalorieGoal;
 
     return Container(
@@ -500,13 +482,12 @@ class _DashboardPageState extends State<DashboardPage> {
                 child: _buildWorkoutCard(
                   context,
                   workout.name,
-                  // Dynamically generate subtitle based on exercises
                   workout.exercises.map((e) => e.name).take(2).join(', ') + (workout.exercises.length > 2 ? '...' : ''),
                   '${workout.duration.inMinutes}m',
-                  '${(workout.totalWeight).toStringAsFixed(1)} kg', // Keep kg if units are metric
+                  '${(workout.totalWeight).toStringAsFixed(1)} kg',
                   Icons.fitness_center,
-                  Theme.of(context).colorScheme.primary, // Using theme primary color
-                  workout.endTime != null, // Assuming workout is completed if endTime is set
+                  Theme.of(context).colorScheme.primary,
+                  workout.endTime != null,
                 ),
               );
             }).toList(),
@@ -619,7 +600,7 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  Widget _buildProgressChart(BuildContext context, Map<String, double> weeklyWorkoutSummary, UserModel currentUser) {
+ Widget _buildProgressChart(BuildContext context, Map<String, double> weeklyWorkoutSummary, UserModel currentUser) {
     final Map<String, double> workoutSummary = weeklyWorkoutSummary;
 
     final List<BarChartGroupData> barGroups = [];
@@ -644,7 +625,7 @@ class _DashboardPageState extends State<DashboardPage> {
               borderRadius: BorderRadius.circular(4),
               backDrawRodData: BackgroundBarChartRodData(
                 show: true,
-                toY: (currentUser.stats.totalWeightLifted > 0 ? currentUser.stats.totalWeightLifted / 7 : 100.0), // Use average or a reasonable base for background bar
+                toY: (currentUser.stats.totalWeightLifted > 0 ? currentUser.stats.totalWeightLifted / 7 : 100.0),
                 color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
               ),
             ),
@@ -659,9 +640,9 @@ class _DashboardPageState extends State<DashboardPage> {
       maxY = workoutSummary.values.reduce((a, b) => a > b ? a : b) * 1.5;
       if (maxY < 100) maxY = 100;
     } else {
-      maxY = 100; // Default max Y if no data
+      maxY = 100;
     }
-    if (maxY < 200) maxY = 200; // Ensure a minimum scale for the chart
+    if (maxY < 200) maxY = 200;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -709,7 +690,7 @@ class _DashboardPageState extends State<DashboardPage> {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      '+12%', // This would typically be dynamic from BLoC, based on actual progress
+                      '+12%',
                       style: TextStyle(
                         color: AppTheme.accentColor,
                         fontWeight: FontWeight.bold,
@@ -759,7 +740,7 @@ class _DashboardPageState extends State<DashboardPage> {
                               if (value == 0) return const Text('');
                               return Text(value.toInt().toString(), style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 10));
                             },
-                            interval: maxY / 4, // Adjust interval based on max Y
+                            interval: maxY / 4,
                             reservedSize: 25,
                           ),
                         ),
@@ -778,8 +759,7 @@ class _DashboardPageState extends State<DashboardPage> {
                       ),
                       barTouchData: BarTouchData(
                         touchTooltipData: BarTouchTooltipData(
-                          // Fixed: tooltipBgColor changed to getTooltipColor in newer fl_chart versions
-                          tooltipBgColor: Colors.blueGrey, // Use the older parameter name for version 0.63.0
+                          tooltipBgColor: Colors.blueGrey,
                           tooltipRoundedRadius: 8,
                           getTooltipItem: (group, groupIndex, rod, rodIndex) {
                             String weekDay = xAxisLabels[group.x.toInt()];
@@ -825,8 +805,6 @@ class _DashboardPageState extends State<DashboardPage> {
     String? currentUserId;
     if (authState is AuthAuthenticated) {
       currentUserId = authState.user.id;
-    } else {
-      currentUserId = null;
     }
 
     return Padding(
@@ -845,7 +823,6 @@ class _DashboardPageState extends State<DashboardPage> {
         ),
         child: FloatingActionButton.extended(
           onPressed: currentUserId == null ? null : () {
-            // Ensure userId is passed to WorkoutSessionPage
             Navigator.push(
               context,
               MaterialPageRoute(builder: (context) => WorkoutSessionPage(userId: currentUserId!)),
@@ -869,7 +846,7 @@ class _DashboardPageState extends State<DashboardPage> {
   Widget _buildBottomNavBar(BuildContext context, int currentIndex) {
     return Container(
       decoration: BoxDecoration(
-        color: _getNavigationBarBackgroundColor(context), // Uses updated helper
+        color: _getNavigationBarBackgroundColor(context),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.1),
@@ -885,9 +862,6 @@ class _DashboardPageState extends State<DashboardPage> {
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               _buildNavItem(context, Icons.home, 'Home', 0, currentIndex, () {
-                // Assuming Home is the DashboardPage itself or a higher-level navigation
-                // For simplicity, navigating to DashboardPage (which will rebuild itself)
-                // In a real app, this might just update an index for a PageView
                   Navigator.pushReplacement(
                     context,
                     MaterialPageRoute(builder: (context) => const DashboardPage()),
@@ -906,9 +880,10 @@ class _DashboardPageState extends State<DashboardPage> {
                 );
               }),
               _buildNavItem(context, Icons.analytics, 'Progress', 3, currentIndex, () {
+                // ProgressPage might be a better fit here if it exists
                 Navigator.pushReplacement(
                   context,
-                  MaterialPageRoute(builder: (context) => const WorkoutHistoryPage()),
+                  MaterialPageRoute(builder: (context) => const WorkoutHistoryPage()), // Placeholder
                 );
               }),
               _buildNavItem(context, Icons.person, 'Profile', 4, currentIndex, () {
@@ -964,5 +939,3 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 }
-
-// Removed duplicate placeholder page definitions. These pages are now imported from their respective feature folders.
