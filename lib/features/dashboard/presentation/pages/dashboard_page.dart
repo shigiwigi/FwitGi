@@ -1,5 +1,3 @@
-// lib/features/dashboard/presentation/pages/dashboard_page.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fl_chart/fl_chart.dart'; // For the bar chart
@@ -8,26 +6,36 @@ import 'package:intl/intl.dart'; // For date formatting
 import '../../../../core/theme/app_theme.dart';
 import 'package:fwitgi_app/features/workout/presentation/pages/workout_selection_page.dart';
 import 'package:fwitgi_app/features/workout/presentation/pages/workout_session_page.dart';
-import 'package:fwitgi_app/core/di/dependency_injection.dart'; // For GetIt access
+import 'package:fwitgi_app/core/di/dependency_injection.dart'; // Changed: Removed 'as di'
 import 'package:fwitgi_app/core/models/user_model.dart'; // For UserModel
 import 'package:fwitgi_app/features/auth/presentation/bloc/auth_bloc.dart'; // For AuthBloc
 import 'package:fwitgi_app/features/auth/presentation/bloc/auth_state.dart'; // For AuthState
+
+// Explicitly import Workout Bloc and its types
 import 'package:fwitgi_app/features/workout/presentation/bloc/workout_bloc.dart'; // For WorkoutBloc
-import 'package:fwitgi_app/features/workout/presentation/bloc/workout_state.dart'; // Added missing import
-import 'package:fwitgi_app/features/workout/presentation/bloc/workout_event.dart'; // Added missing import
 import 'package:fwitgi_app/features/workout/domain/entities/workout.dart'; // For Workout entity
+import 'package:fwitgi_app/features/workout/presentation/bloc/workout_event.dart'; // For WorkoutEvent (LoadWorkouts, LoadWorkoutTemplates)
+import 'package:fwitgi_app/features/workout/presentation/bloc/workout_state.dart'; // For WorkoutState (WorkoutLoading, WorkoutLoaded, WorkoutError)
+
+
+// Explicitly import Nutrition Bloc and its types
 import 'package:fwitgi_app/features/nutrition/presentation/bloc/nutrition_bloc.dart'; // For NutritionBloc
-import 'package:fwitgi_app/features/nutrition/presentation/bloc/nutrition_state.dart'; // For NutritionState
-import 'package:fwitgi_app/features/nutrition/presentation/bloc/nutrition_event.dart'; // Added missing import
-import 'package:fwitgi_app/features/body_tracking/presentation/bloc/body_tracking_bloc.dart';
-import 'package:fwitgi_app/features/body_tracking/presentation/bloc/body_tracking_state.dart'; // For BodyTrackingState
-import 'package:fwitgi_app/features/body_tracking/presentation/bloc/body_tracking_event.dart'; // Added missing import
+import 'package:fwitgi_app/features/nutrition/presentation/bloc/nutrition_event.dart'; // For NutritionEvent (LoadDailyNutritionEvent)
+import 'package:fwitgi_app/features/nutrition/presentation/bloc/nutrition_state.dart'; // For NutritionState (NutritionLoaded, NutritionLoading, NutritionError)
+
+// Explicitly import Body Tracking Bloc and its types
+import 'package:fwitgi_app/features/body_tracking/presentation/bloc/body_tracking_bloc.dart'; // For BodyTrackingBloc
+import 'package:fwitgi_app/features/body_tracking/presentation/bloc/body_tracking_event.dart'; // For BodyTrackingEvent (LoadBodyStatsEvent)
+import 'package:fwitgi_app/features/body_tracking/presentation/bloc/body_tracking_state.dart'; // For BodyTrackingState (BodyTrackingLoaded, BodyTrackingLoading, BodyTrackingError)
 
 // Corrected imports for actual page files
-import 'package:fwitgi_app/features/nutrition/presentation/pages/nutrition_page.dart'; // Corrected import
-import 'package:fwitgi_app/features/body_tracking/presentation/pages/body_tracking_page.dart'; // Corrected import
-import 'package:fwitgi_app/features/workout/presentation/pages/workout_history_page.dart'; // Corrected import
-import 'package:fwitgi_app/features/user/presentation/pages/user_profile_page.dart'; // Corrected import
+import 'package:fwitgi_app/features/nutrition/presentation/pages/nutrition_page.dart';
+import 'package:fwitgi_app/features/body_tracking/presentation/pages/body_tracking_page.dart';
+import 'package:fwitgi_app/features/workout/presentation/pages/workout_history_page.dart';
+import 'package:fwitgi_app/features/user/presentation/pages/user_profile_page.dart';
+
+// If you plan to create a ProgressPage, uncomment this line later.
+// import 'package:fwitgi_app/features/progress/presentation/pages/progress_page.dart';
 
 
 class DashboardPage extends StatefulWidget {
@@ -56,10 +64,10 @@ class _DashboardPageState extends State<DashboardPage> {
   void initState() {
     super.initState();
     // FIX: Changed 'getIt' to 'getlt' to match the actual name in dependency_injection.dart
-    _authBloc = di.getlt<AuthBloc>();
-    _workoutBloc = di.getlt<WorkoutBloc>();
-    _nutritionBloc = di.getlt<NutritionBloc>();
-    _bodyTrackingBloc = di.getlt<BodyTrackingBloc>();
+    _authBloc = getlt<AuthBloc>();
+    _workoutBloc = getlt<WorkoutBloc>();
+    _nutritionBloc = getlt<NutritionBloc>();
+    _bodyTrackingBloc = getlt<BodyTrackingBloc>();
 
     // Use addPostFrameCallback to ensure context is fully available
     // before accessing Bloc state and dispatching events.
@@ -771,7 +779,7 @@ class _DashboardPageState extends State<DashboardPage> {
                       barTouchData: BarTouchData(
                         touchTooltipData: BarTouchTooltipData(
                           // Fixed: tooltipBgColor changed to getTooltipColor in newer fl_chart versions
-                          getTooltipColor: (group) => Colors.blueGrey,
+                          tooltipBgColor: Colors.blueGrey, // Use the older parameter name for version 0.63.0
                           tooltipRoundedRadius: 8,
                           getTooltipItem: (group, groupIndex, rod, rodIndex) {
                             String weekDay = xAxisLabels[group.x.toInt()];
@@ -900,7 +908,7 @@ class _DashboardPageState extends State<DashboardPage> {
               _buildNavItem(context, Icons.analytics, 'Progress', 3, currentIndex, () {
                 Navigator.pushReplacement(
                   context,
-                  MaterialPageRoute(builder: (context) => const ProgressPage()),
+                  MaterialPageRoute(builder: (context) => const WorkoutHistoryPage()),
                 );
               }),
               _buildNavItem(context, Icons.person, 'Profile', 4, currentIndex, () {
