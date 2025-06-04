@@ -40,6 +40,8 @@ import 'package:fwitgi_app/features/user/presentation/pages/user_profile_page.da
 import 'package:fwitgi_app/features/workout/domain/repositories/exercise_definition_repository.dart';
 import 'package:fwitgi_app/features/workout/domain/entities/exercise_definition.dart';
 
+import 'package:fwitgi_app/features/progress/presentation/pages/progress_page.dart'; 
+
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({Key? key}) : super(key: key);
@@ -919,7 +921,7 @@ class _DashboardPageState extends State<DashboardPage> {
               _buildNavItem(context, Icons.analytics, 'Progress', 3, currentIndex, () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const WorkoutHistoryPage()),
+                  MaterialPageRoute(builder: (context) => const ProgressPage()), // Changed to ProgressPage
                 );
               }),
               _buildNavItem(context, Icons.person, 'Profile', 4, currentIndex, () {

@@ -161,8 +161,11 @@ class ExerciseDefinitionRepositoryImpl implements ExerciseDefinitionRepository {
       print('DEBUG: ExerciseDefinitionRepository: Fetched ${querySnapshot.docs.length} exercise definitions from Firestore.');
 
       return querySnapshot.docs
-          .map((doc) => ExerciseDefinition.fromJson(doc.data()))
-          .toList();
+    .map((doc) => ExerciseDefinition.fromJson({
+          'id': doc.id, // Explicitly add the document ID
+          ...doc.data()!, // Spread the rest of the document data
+        }))
+    .toList();
     } catch (e) {
       // ADD THIS PRINT STATEMENT FOR ERRORS
       print('ERROR: ExerciseDefinitionRepository: Failed to get exercise definitions from Firestore: ${e.toString()}');

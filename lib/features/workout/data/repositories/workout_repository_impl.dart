@@ -13,9 +13,9 @@ class WorkoutRepositoryImpl implements WorkoutRepository {
   final Uuid _uuid = const Uuid();
 
   // Inject ExerciseDefinitionRepository
-  final ExerciseDefinitionRepository _exerciseDefinitionRepository; // ADD THIS
+  final ExerciseDefinitionRepository _exerciseDefinitionRepository;
 
-  WorkoutRepositoryImpl(this._exerciseDefinitionRepository); // UPDATE CONSTRUCTOR
+  WorkoutRepositoryImpl(this._exerciseDefinitionRepository);
 
 
   @override
@@ -63,7 +63,7 @@ class WorkoutRepositoryImpl implements WorkoutRepository {
     return [
       // Existing Push Day Template
       Workout(
-        id: _uuid.v4(),
+        id: 'template_push_day', // Changed to static ID
         userId: 'template_user_id',
         name: 'Push Day Template',
         type: WorkoutType.push,
@@ -110,7 +110,7 @@ class WorkoutRepositoryImpl implements WorkoutRepository {
       ),
       // Existing Pull Day Template
       Workout(
-        id: _uuid.v4(),
+        id: 'template_pull_day', // Changed to static ID
         userId: 'template_user_id',
         name: 'Pull Day Template',
         type: WorkoutType.pull,
@@ -147,7 +147,7 @@ class WorkoutRepositoryImpl implements WorkoutRepository {
       ),
       // --- New Template: Beginner Full Body - Day 1 (No Equipment) ---
       Workout(
-        id: _uuid.v4(),
+        id: 'template_beginner_full_body_day1', // Changed to static ID
         userId: 'template_user_id',
         name: 'Beginner Full Body - Day 1 (No Equipment)',
         type: WorkoutType.fullBody,
@@ -184,7 +184,7 @@ class WorkoutRepositoryImpl implements WorkoutRepository {
       ),
       // --- New Template: Beginner Full Body - Day 3 (No Equipment) ---
       Workout(
-        id: _uuid.v4(),
+        id: 'template_beginner_full_body_day3', // Changed to static ID
         userId: 'template_user_id',
         name: 'Beginner Full Body - Day 3 (No Equipment)',
         type: WorkoutType.legs,
@@ -218,7 +218,7 @@ class WorkoutRepositoryImpl implements WorkoutRepository {
       ),
       // --- New Template: Beginner Full Body - Day 5 (No Equipment) ---
       Workout(
-        id: _uuid.v4(),
+        id: 'template_beginner_full_body_day5', // Changed to static ID
         userId: 'template_user_id',
         name: 'Beginner Full Body - Day 5 (No Equipment)',
         type: WorkoutType.fullBody,
@@ -297,7 +297,7 @@ class WorkoutRepositoryImpl implements WorkoutRepository {
       name: data['name'],
       type: WorkoutType.values[data['type']],
       exercises: (data['exercises'] as List)
-          .map((e) => WorkoutExercise.fromJson(e as Map<String, dynamic>)) // UPDATED: Use WorkoutExercise.fromJson
+          .map((e) => WorkoutExercise.fromJson(e as Map<String, dynamic>))
           .toList(),
       startTime: (data['startTime'] as Timestamp).toDate(),
       endTime: data['endTime'] != null
@@ -317,7 +317,7 @@ class WorkoutRepositoryImpl implements WorkoutRepository {
       'userId': workout.userId,
       'name': workout.name,
       'type': workout.type.index,
-      'exercises': workout.exercises.map((e) => e.toJson()).toList(), // UPDATED: Use WorkoutExercise.toJson
+      'exercises': workout.exercises.map((e) => e.toJson()).toList(),
       'startTime': Timestamp.fromDate(workout.startTime),
       'endTime': workout.endTime != null
           ? Timestamp.fromDate(workout.endTime!)
