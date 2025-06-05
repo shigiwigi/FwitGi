@@ -64,6 +64,7 @@ dev_dependencies:
     sdk: flutter
   build_runner: ^2.4.6
   hive_generator: ^2.0.0
+  flutter_launcher_icons: "^0.14.3" # Use the latest version
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -103,4 +104,4 @@ flutter:
   #         weight: 700
   #
   # For details regarding fonts from package dependencies,
-  # see https://flutter.dev/to/font-from-package
+  # see https://flutter.dev/to/font-from-package.

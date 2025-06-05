@@ -1,6 +1,6 @@
 {
-    "name": "fwitgi_app",
-    "short_name": "fwitgi_app",
+    "name": "FwitGi",
+    "short_name": "FwitGi",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
